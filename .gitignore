@@ -1,0 +1,44 @@
+# Operating system files
+.DS_Store
+**/.DS_Store
+
+# JavaScript dependencies and build output
+**/node_modules/
+**/dist/
+**/.vite/
+**/coverage/
+*.tsbuildinfo
+
+# Python environments and caches
+.venv/
+**/.venv/
+**/__pycache__/
+*.py[cod]
+**/.pytest_cache/
+**/.mypy_cache/
+**/.ruff_cache/
+**/.ipynb_checkpoints/
+**/*.egg-info/
+.coverage
+**/htmlcov/
+
+# Local configuration and secrets
+.env
+.env.*
+!.env.example
+
+# Tool caches and temporary files
+.cache/
+**/.cache/
+.gradio/
+**/.gradio/
+tmp/
+.idea/
+.vscode/
+
+# Internal development notes are kept locally and are not repository content.
+docs/internal/
+
+# The trained model is restored from the Hugging Face Space.
+# Keep it locally for inference, but do not place the 80 MB artifact in Git.
+apps/inference/model/

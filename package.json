@@ -1,0 +1,16 @@
+{
+  "name": "nayana-monorepo",
+  "private": true,
+  "version": "0.1.0",
+  "workspaces": [
+    "apps/*"
+  ],
+  "scripts": {
+    "dev:web": "npm run dev --workspace=nayana-web",
+    "check:structure": "bash scripts/check-structure.sh",
+    "check:css": "npm run check:css --workspace=nayana-web",
+    "lint": "npm run lint --workspace=nayana-web",
+    "build": "npm run build --workspace=nayana-web",
+    "validate": "npm run check:structure && npm run check:css && npm run lint && npm run build"
+  }
+}
