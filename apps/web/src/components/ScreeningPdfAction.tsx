@@ -7,6 +7,8 @@ type ScreeningPdfActionProps = {
   className?: string
   imageUrl?: string | null
   imageDownloadName?: string
+  imageDownloadLabel?: string
+  showImageOptions?: boolean
 }
 
 const maxPdfAttachmentBytes = 10 * 1024 * 1024
@@ -28,7 +30,15 @@ function readBlobAsBase64(blob: Blob) {
   })
 }
 
-export function ScreeningPdfAction({ screening, summary, className, imageUrl, imageDownloadName = 'nayana-foto-fundus.jpg' }: ScreeningPdfActionProps) {
+export function ScreeningPdfAction({
+  screening,
+  summary,
+  className,
+  imageUrl,
+  imageDownloadName = 'nayana-foto-fundus.jpg',
+  imageDownloadLabel = 'Unduh foto fundus',
+  showImageOptions = false,
+}: ScreeningPdfActionProps) {
   const [state, setState] = useState<'idle' | 'loading' | 'error'>('idle')
   const [error, setError] = useState<string | null>(null)
   const [includeImage, setIncludeImage] = useState(false)
@@ -83,8 +93,10 @@ export function ScreeningPdfAction({ screening, summary, className, imageUrl, im
 
   return (
     <div className={['screening-pdf', className].filter(Boolean).join(' ')}>
-      {imageUrl && (
+      {showImageOptions && (
         <div className="screening-pdf__options">
+          {imageUrl ? (
+            <>
           <label className="screening-pdf__include">
             <input type="checkbox" checked={includeImage} onChange={(event) => setIncludeImage(event.target.checked)} />
             <span>
@@ -93,8 +105,12 @@ export function ScreeningPdfAction({ screening, summary, className, imageUrl, im
             </span>
           </label>
           <button className="app-text-action" type="button" onClick={() => { void downloadImage() }} disabled={imageState === 'loading'}>
-            {imageState === 'loading' ? 'Menyiapkan foto…' : 'Unduh foto fundus (JPEG)'}
+            {imageState === 'loading' ? 'Menyiapkan foto…' : imageDownloadLabel}
           </button>
+            </>
+          ) : (
+            <p className="screening-pdf__unavailable">Foto tidak tersimpan atau belum dapat dimuat, sehingga PDF dibuat tanpa lampiran foto.</p>
+          )}
         </div>
       )}
       <button className="app-secondary-action" type="button" onClick={() => { void download() }} disabled={state === 'loading'}>

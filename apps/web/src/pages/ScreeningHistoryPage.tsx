@@ -243,8 +243,12 @@ export function ScreeningHistoryPage() {
                     className="app-history-detail__pdf"
                     screening={screeningFromHistory(selected)}
                     summary={selected.executive_summary}
-                    imageUrl={selected.source === 'upload' ? selectedPhotoUrl : null}
-                    imageDownloadName={'nayana-foto-fundus-' + selected.id + '.jpg'}
+                    imageUrl={selectedPhotoUrl || selectedDemoImageUrl || null}
+                    imageDownloadName={selected.source === 'upload'
+                      ? 'nayana-foto-fundus-' + selected.id + '.jpg'
+                      : 'nayana-gambar-contoh-' + selected.id + (selectedDemoImageUrl.endsWith('.jpg') ? '.jpg' : '.png')}
+                    imageDownloadLabel={selected.source === 'upload' ? 'Unduh foto fundus (JPEG)' : 'Unduh gambar contoh'}
+                    showImageOptions
                   />
                   <p className="app-history-detail__note">Hasil ini adalah skrining awal dari satu foto fundus. Persentase menunjukkan kemiripan pola, bukan tingkat keparahan.</p>
                   <div className="app-history-detail__actions">

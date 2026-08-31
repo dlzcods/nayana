@@ -394,6 +394,7 @@
 .screening-pdf__include span { display: grid; gap: 3px; }
 .screening-pdf__include strong { color: var(--optic-ink); font-size: 13px; font-weight: 600; }
 .screening-pdf__include small { max-width: 460px; color: #62636a; font-size: 11px; line-height: 1.45; }
+.screening-pdf__unavailable { max-width: 460px; color: #62636a; font-size: 11px; line-height: 1.45; }
 .screening-pdf__options .app-text-action { width: fit-content; padding: 0; border: 0; background: transparent; color: var(--optic-blue); font: inherit; font-size: 12px; cursor: pointer; }
 .screening-pdf__options .app-text-action:disabled { color: #a4a5aa; cursor: not-allowed; }
 .app-history-detail__pdf { padding: 18px 0; align-items: end; }
