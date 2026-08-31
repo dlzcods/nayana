@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { BrandMark } from './BrandMark'
+import { authChangeEvent, getAuthSession } from '../lib/supabase-auth'
 
-const screeningUrl = 'https://huggingface.co/spaces/dielz/eye-disease-classification'
 const navItems = [
   { label: 'Beranda', href: '/' },
   { label: 'Cara kerja', href: '/#cara-kerja' },
@@ -11,6 +11,18 @@ const navItems = [
 
 export function SiteHeader() {
   const [open, setOpen] = useState(false)
+  const [signedIn, setSignedIn] = useState(false)
+
+  useEffect(() => {
+    const syncSignedIn = () => setSignedIn(Boolean(getAuthSession()))
+    syncSignedIn()
+    window.addEventListener(authChangeEvent, syncSignedIn)
+    window.addEventListener('storage', syncSignedIn)
+    return () => {
+      window.removeEventListener(authChangeEvent, syncSignedIn)
+      window.removeEventListener('storage', syncSignedIn)
+    }
+  }, [])
 
   useEffect(() => {
     if (!open) return
@@ -32,7 +44,8 @@ export function SiteHeader() {
         <BrandMark />
         <nav className="optic-header__right" aria-label="Navigasi pendukung">
           <a href="/model-evidence">Bukti model</a>
-          <a className="optic-header__screen" href={screeningUrl} target="_blank" rel="noreferrer">Cek kondisi mata</a>
+          <a href={signedIn ? '/history' : '/login'}>{signedIn ? 'Riwayat' : 'Masuk'}</a>
+          <a className="optic-header__screen" href="/screening">Cek kondisi mata</a>
         </nav>
         <button
           className="optic-menu"
@@ -47,7 +60,8 @@ export function SiteHeader() {
       {open && (
         <nav id="optic-mobile-nav" className="optic-mobile-nav optic-shell" aria-label="Navigasi seluler">
           {navItems.map((item) => <a href={item.href} key={item.label} onClick={() => setOpen(false)}>{item.label}</a>)}
-          <a className="optic-primary" href={screeningUrl} target="_blank" rel="noreferrer" onClick={() => setOpen(false)}>Cek kondisi mata</a>
+          <a href={signedIn ? '/history' : '/login'} onClick={() => setOpen(false)}>{signedIn ? 'Riwayat' : 'Masuk'}</a>
+          <a className="optic-primary" href="/screening" onClick={() => setOpen(false)}>Cek kondisi mata</a>
         </nav>
       )}
     </header>

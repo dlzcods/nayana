@@ -15,6 +15,21 @@
 @media(prefers-reduced-motion:reduce){.optic-page *,.optic-page *::before,.optic-page *::after{scroll-behavior:auto!important;transition-duration:.01ms!important;animation-duration:.01ms!important;animation-iteration-count:1!important}}
 .optic-header{position:sticky;top:0;background:#f7f7f5}
 
+/* Shared compact header: landing, screening, evidence, and legal pages. */
+@media (max-width:820px){
+  .optic-header__inner{min-height:56px}
+  .optic-header .brand__image-window{width:142px;height:34px}
+  .optic-header .brand__image{left:-12px;top:-29px;width:162px}
+  .optic-menu{gap:10px;font-size:11px}
+  .optic-menu i{width:20px}
+}
+
+@media (max-width:560px){
+  .optic-header__inner{min-height:52px}
+  .optic-header .brand__image-window{width:132px;height:31px}
+  .optic-header .brand__image{left:-11px;top:-26px;width:151px}
+}
+
 /* Hero proportion refinement: center the composition in the viewport below the 90px navbar. */
 .optic-hero{min-height:calc(100svh - 90px);align-items:center;padding-block:clamp(40px,6vh,72px)}
 .optic-hero h1{font-size:clamp(54px,5vw,76px)}

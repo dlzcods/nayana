@@ -1,15 +1,10 @@
 import { AnimatePresence, motion, useReducedMotion } from 'motion/react'
-import { useEffect, useState } from 'react'
+import { useState } from 'react'
 import { BrandMark } from '../components/BrandMark'
 import { ProductDemo } from '../components/ProductDemo'
+import { SiteHeader } from '../components/SiteHeader'
 
-const screeningUrl = 'https://huggingface.co/spaces/dielz/eye-disease-classification'
-const navItems = [
-  { label: 'Beranda', href: '#beranda' },
-  { label: 'Cara kerja', href: '#cara-kerja' },
-  { label: 'Cakupan', href: '#cakupan' },
-  { label: 'Bukti model', href: '/model-evidence' },
-]
+const screeningUrl = '/screening'
 const conditions = [
   { number: '01', name: 'Katarak', copy: 'Mengenali pola yang mirip dengan kekeruhan pada lensa mata.' },
   { number: '02', name: 'Glaukoma', copy: 'Mengenali perubahan pola di sekitar saraf mata. Pemeriksaan tekanan mata tetap perlu dilakukan langsung oleh dokter spesialis mata (Sp.M).' },
@@ -30,37 +25,12 @@ const faqs = [
 
 export function LandingPage() {
   const reduceMotion = useReducedMotion()
-  const [menuOpen, setMenuOpen] = useState(false)
   const [openFaq, setOpenFaq] = useState<number | null>(0)
-  useEffect(() => {
-    if (!menuOpen) return
-    const close = (event: KeyboardEvent) => event.key === 'Escape' && setMenuOpen(false)
-    window.addEventListener('keydown', close)
-    return () => window.removeEventListener('keydown', close)
-  }, [menuOpen])
   const reveal = reduceMotion ? {} : { initial: { opacity: 0, y: 24 }, whileInView: { opacity: 1, y: 0 }, viewport: { once: true, amount: 0.2 }, transition: { duration: 0.65 } }
 
   return (
     <div className="optic-page" id="beranda">
-      <header className="optic-header">
-        <div className="optic-shell optic-header__inner">
-          <nav className="optic-header__left" aria-label="Navigasi utama">
-            {navItems.slice(0, 3).map((item) => <a href={item.href} key={item.label}>{item.label}</a>)}
-          </nav>
-          <BrandMark />
-          <nav className="optic-header__right" aria-label="Navigasi pendukung">
-            <a href="/model-evidence">Bukti model</a>
-            <a className="optic-header__screen" href={screeningUrl} target="_blank" rel="noreferrer">Cek kondisi mata</a>
-          </nav>
-          <button className="optic-menu" type="button" aria-expanded={menuOpen} aria-controls="optic-mobile-nav" onClick={() => setMenuOpen((current) => !current)}>
-            <span>{menuOpen ? 'Tutup' : 'Menu'}</span><i aria-hidden="true" />
-          </button>
-        </div>
-        {menuOpen && <nav className="optic-mobile-nav optic-shell" id="optic-mobile-nav" aria-label="Navigasi seluler">
-          {navItems.map((item) => <a href={item.href} key={item.label} onClick={() => setMenuOpen(false)}>{item.label}</a>)}
-          <a className="optic-primary" href={screeningUrl} target="_blank" rel="noreferrer">Cek kondisi mata</a>
-        </nav>}
-      </header>
+      <SiteHeader />
 
       <main>
         <section className="optic-hero optic-shell">
@@ -68,7 +38,7 @@ export function LandingPage() {
             <p className="optic-overline">Alat bantu cek awal kesehatan mata</p>
             <h1>Kenali Kondisi Mata <span className="optic-hero__underline">Lebih Awal.</span></h1>
             <p className="optic-hero__lead">Unggah foto retina untuk mendapatkan gambaran awal sebelum berkonsultasi dengan dokter spesialis mata (Sp.M).</p>
-            <div className="optic-actions"><a className="optic-primary" href={screeningUrl} target="_blank" rel="noreferrer">Cek sekarang</a><a className="optic-secondary" href="#cara-kerja">Pelajari cara kerja <span aria-hidden="true">↗</span></a></div>
+            <div className="optic-actions"><a className="optic-primary" href={screeningUrl}>Cek sekarang</a><a className="optic-secondary" href="#cara-kerja">Pelajari cara kerja <span aria-hidden="true">↗</span></a></div>
             {/*<p className="optic-medical-note">Hasil ini adalah panduan awal, bukan diagnosis resmi. Selalu konfirmasikan kondisi mata Anda ke dokter spesialis mata (Sp.M).</p>*/}
           </motion.div>
           <motion.figure className="optic-hero__image" initial={reduceMotion ? undefined : { opacity: 0, x: 28 }} animate={{ opacity: 1, x: 0 }} transition={{ duration: reduceMotion ? 0 : 0.75, delay: reduceMotion ? 0 : 0.12 }}>
@@ -154,12 +124,12 @@ export function LandingPage() {
           </div>
         </section>
 
-        <section className="optic-closing optic-shell"><img src="/assets/eye-original/eye-closeup-shadow-portrait.jpg" alt="Close-up mata manusia dalam cahaya dan bayangan" /><div className="optic-closing__overlay"><p>Langkah awal untuk mengenali mata Anda</p><h2>Mulai dari gambaran awal. Lanjutkan dengan pemeriksaan yang tepat.</h2><a className="optic-primary optic-primary--light" href={screeningUrl} target="_blank" rel="noreferrer">Cek kondisi mata</a></div></section>
+        <section className="optic-closing optic-shell"><img src="/assets/eye-original/eye-closeup-shadow-portrait.jpg" alt="Close-up mata manusia dalam cahaya dan bayangan" /><div className="optic-closing__overlay"><p>Langkah awal untuk mengenali mata Anda</p><h2>Mulai dari gambaran awal. Lanjutkan dengan pemeriksaan yang tepat.</h2><a className="optic-primary optic-primary--light" href={screeningUrl}>Cek kondisi mata</a></div></section>
       </main>
 
       <footer className="optic-footer"><div className="optic-shell optic-footer__top">
         <div><BrandMark /><p>Prototipe riset untuk panduan awal foto retina. Bukan perangkat medis dan bukan layanan darurat.</p></div>
-        <nav aria-label="Tautan proyek"><span>Proyek</span><a href="#cara-kerja">Cara kerja</a><a href="/model-evidence">Bukti model</a><a href={screeningUrl} target="_blank" rel="noreferrer">Demo analisis</a></nav>
+        <nav aria-label="Tautan proyek"><span>Proyek</span><a href="#cara-kerja">Cara kerja</a><a href="/model-evidence">Bukti model</a><a href={screeningUrl}>Demo analisis</a></nav>
         <nav aria-label="Tautan kepercayaan"><span>Kepercayaan</span><a href="/terms">Ketentuan penggunaan</a></nav>
       </div><div className="optic-shell optic-footer__bottom"><span>© 2026 NAYANA</span><span>Pemeriksaan klinis tetap dilakukan oleh dokter spesialis mata (Sp.M).</span></div></footer>
     </div>

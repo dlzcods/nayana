@@ -12,7 +12,7 @@ export function SiteFooter() {
           <span>Proyek</span>
           <a href="/#cara-kerja">Cara kerja</a>
           <a href="/model-evidence">Bukti model</a>
-          <a href="https://huggingface.co/spaces/dielz/eye-disease-classification" target="_blank" rel="noreferrer">Demo analisis</a>
+          <a href="/screening">Demo analisis</a>
         </div>
         <div className="footer-links">
           <span>Kepercayaan</span>

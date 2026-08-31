@@ -1,6 +1,6 @@
 import { motion, useReducedMotion } from 'motion/react'
 
-const screeningUrl = 'https://huggingface.co/spaces/dielz/eye-disease-classification'
+const screeningUrl = '/screening'
 
 const resultRows = [
   { name: 'Katarak', value: 91 },
@@ -70,7 +70,7 @@ export function ProductDemo() {
           <span>Langkah selanjutnya</span>
           <p>Konsultasikan hasil ini dengan dokter spesialis mata (Sp.M.) untuk pemeriksaan lebih lanjut.</p>
         </div>
-        <a className="optic-primary" href={screeningUrl} target="_blank" rel="noreferrer">
+        <a className="optic-primary" href={screeningUrl}>
           Cek mata Anda sekarang
         </a>
       </div>

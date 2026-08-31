@@ -3,6 +3,7 @@
 @import '@fontsource/ibm-plex-sans/latin-600.css';
 @import 'tailwindcss';
 @import './hero-preview.css';
+@import './app-flow.css';
 
 :root {
   color: #1b252d;
@@ -239,9 +240,9 @@ h1, h2, h3 { font-family: 'IBM Plex Sans', Arial, sans-serif; font-weight: 500; 
 
 .site-footer__bottom { min-height: 66px; display: flex; align-items: center; justify-content: space-between; gap: 24px; border-top: 1px solid #334f64; color: #8499a6; font-size: 9px; letter-spacing: .06em; text-transform: uppercase; }
 
-.document { max-width: 850px; padding-block: 90px 130px; }
+.document { max-width: 850px; padding-block: 52px 110px; }
 
-.document__back { display: inline-block; margin-bottom: 70px; color: var(--blue); font-size: 12px; border-bottom: 1px solid #a9b6bc; padding-bottom: 5px; }
+.document__back { display: inline-block; margin-bottom: 38px; color: var(--blue); font-size: 12px; border-bottom: 1px solid #a9b6bc; padding-bottom: 5px; }
 
 .document h1 { margin: 0; font-family: 'IBM Plex Sans', Arial, sans-serif; font-weight: 500; font-size: clamp(48px, 7vw, 78px); line-height: .98; letter-spacing: -.055em; }
 
