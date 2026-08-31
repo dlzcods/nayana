@@ -4,3 +4,4 @@ markdown2
 tensorflow
 numpy
 Pillow
+fastapi[standard]
