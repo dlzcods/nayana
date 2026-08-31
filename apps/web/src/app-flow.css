@@ -388,6 +388,15 @@
 .screening-pdf { grid-column: 1 / -1; padding: 20px clamp(26px, 4vw, 48px); display: flex; align-items: center; gap: 14px; border-top: 1px solid var(--optic-line); }
 .screening-pdf .app-secondary-action { width: auto; padding-inline: 18px; }
 .screening-pdf p { margin: 0; color: #a63f34; font-size: 12px; }
+.screening-pdf__options { display: grid; gap: 9px; }
+.screening-pdf__include { display: flex; align-items: flex-start; gap: 10px; color: #4f5056; cursor: pointer; }
+.screening-pdf__include input { width: 16px; height: 16px; margin: 2px 0 0; accent-color: var(--optic-blue); }
+.screening-pdf__include span { display: grid; gap: 3px; }
+.screening-pdf__include strong { color: var(--optic-ink); font-size: 13px; font-weight: 600; }
+.screening-pdf__include small { max-width: 460px; color: #62636a; font-size: 11px; line-height: 1.45; }
+.screening-pdf__options .app-text-action { width: fit-content; padding: 0; border: 0; background: transparent; color: var(--optic-blue); font: inherit; font-size: 12px; cursor: pointer; }
+.screening-pdf__options .app-text-action:disabled { color: #a4a5aa; cursor: not-allowed; }
+.app-history-detail__pdf { padding: 18px 0; align-items: end; }
 
 .executive-summary__head {
   max-width: 720px;
@@ -2081,6 +2090,8 @@
   .app-history-detail__probabilities > div { grid-template-columns: minmax(92px, .9fr) minmax(50px, 1fr) 35px; gap: 8px; font-size: 10px; }
   .app-history-detail__actions { align-items: stretch; flex-direction: column; gap: 14px; }
   .app-history-detail__actions .app-primary-action { width: 100%; }
+  .app-history-detail__pdf { align-items: stretch; flex-direction: column; }
+  .app-history-detail__pdf .app-secondary-action { width: 100%; }
   .app-page--chat { overflow: visible; }
   .app-history-chat { min-height: calc(100dvh - 82px); height: auto; grid-template-columns: 1fr; }
   .app-history-chat__context { padding: 24px 16px; border-right: 0; border-bottom: 1px solid var(--optic-line); }

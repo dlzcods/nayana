@@ -11,6 +11,8 @@ they are not yet sent to the disease-classification model or stored.
 
 from __future__ import annotations
 
+import base64
+import binascii
 import json
 import logging
 import os
@@ -42,6 +44,8 @@ MAX_IMAGE_DIMENSION = 4096
 DEFAULT_GEMINI_MODEL = "gemma-4-26b-a4b-it"
 MAX_USER_CHAT_CHARS = 900
 MAX_ASSISTANT_CHAT_CHARS = 4000
+MAX_PDF_IMAGE_BYTES = 10 * 1024 * 1024
+MAX_PDF_IMAGE_BASE64_CHARS = 14_000_000
 LABELS = (
     ("cataract", "Katarak"),
     ("diabetic_retinopathy", "Retinopati diabetik"),
@@ -173,6 +177,7 @@ class SuggestedQuestionResponse(BaseModel):
 class ScreeningPdfRequest(BaseModel):
     screening: ScreeningResult
     summary: ExecutiveSummary | None = None
+    fundus_image_base64: str | None = Field(default=None, max_length=MAX_PDF_IMAGE_BASE64_CHARS)
 
 
 app = FastAPI(
@@ -686,6 +691,30 @@ def generate_screening_chat(payload: ScreeningChatRequest) -> ScreeningChatRespo
         raise HTTPException(status_code=503, detail="Jawaban belum dapat dibuat. Silakan coba lagi.") from error
 
 
+def decode_pdf_attachment(image_base64: str | None) -> tuple[BytesIO, int, int] | None:
+    """Validate an optional user-selected PDF attachment without persisting it."""
+
+    if not image_base64:
+        return None
+    try:
+        image_bytes = base64.b64decode(image_base64, validate=True)
+    except (binascii.Error, ValueError) as error:
+        raise HTTPException(status_code=400, detail="Lampiran foto untuk PDF tidak dapat dibaca.") from error
+    if not image_bytes or len(image_bytes) > MAX_PDF_IMAGE_BYTES:
+        raise HTTPException(status_code=413, detail="Lampiran foto untuk PDF melebihi batas 10 MB.")
+    try:
+        image_buffer = BytesIO(image_bytes)
+        with Image.open(image_buffer) as image:
+            image.load()
+            width, height = image.size
+            if min(width, height) < MIN_IMAGE_DIMENSION:
+                raise ValueError("Foto terlalu kecil.")
+    except (OSError, ValueError) as error:
+        raise HTTPException(status_code=400, detail="Lampiran foto untuk PDF bukan gambar yang valid.") from error
+    image_buffer.seek(0)
+    return image_buffer, width, height
+
+
 def build_screening_pdf(payload: ScreeningPdfRequest) -> BytesIO:
     """Create an editorial, non-diagnostic PDF report with only supplied result data."""
 
@@ -693,7 +722,7 @@ def build_screening_pdf(payload: ScreeningPdfRequest) -> BytesIO:
     from reportlab.lib.pagesizes import A4
     from reportlab.lib.styles import ParagraphStyle, getSampleStyleSheet
     from reportlab.lib.units import mm
-    from reportlab.platypus import HRFlowable, Image as PdfImage, Paragraph, SimpleDocTemplate, Spacer, Table, TableStyle
+    from reportlab.platypus import HRFlowable, Image as PdfImage, PageBreak, Paragraph, SimpleDocTemplate, Spacer, Table, TableStyle
 
     buffer = BytesIO()
     document = SimpleDocTemplate(
@@ -744,6 +773,24 @@ def build_screening_pdf(payload: ScreeningPdfRequest) -> BytesIO:
             story.append(Paragraph(text, body_style))
         story.append(Spacer(1, 6 * mm))
         story.append(Paragraph(payload.summary.disclaimer, ParagraphStyle("disclaimer", fontName="Helvetica", fontSize=8.5, leading=12, textColor=muted)))
+    attachment = decode_pdf_attachment(payload.fundus_image_base64)
+    if attachment:
+        image_buffer, width, height = attachment
+        max_width = 170 * mm
+        max_height = 220 * mm
+        scale = min(max_width / width, max_height / height)
+        story.extend([
+            PageBreak(),
+            Paragraph("Lampiran foto fundus", ParagraphStyle("attachment-title", fontName="Helvetica-Bold", fontSize=17, leading=22, textColor=ink)),
+            Spacer(1, 3 * mm),
+            Paragraph(
+                "Foto ini disertakan atas pilihan pengguna sebagai referensi visual. "
+                "Gunakan file foto terpisah bila detail atau pembesaran diperlukan.",
+                ParagraphStyle("attachment-note", fontName="Helvetica", fontSize=9, leading=13, textColor=muted),
+            ),
+            Spacer(1, 8 * mm),
+            PdfImage(image_buffer, width=width * scale, height=height * scale),
+        ])
     story.extend([Spacer(1, 7 * mm), HRFlowable(width="100%", color=HexColor("#D8D8D3"), thickness=.5), Spacer(1, 3 * mm), Paragraph(
         "NAYANA adalah pendamping edukasi dari foto fundus. Dokumen ini bukan penetapan kondisi medis dan tidak menggantikan pemeriksaan langsung oleh dokter spesialis mata (Sp.M).",
         ParagraphStyle("footer", fontName="Helvetica", fontSize=8, leading=12, textColor=muted),

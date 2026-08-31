@@ -210,11 +210,16 @@ export function getSuggestedQuestions(options: {
 export async function downloadScreeningPdf(options: {
   screening: ScreeningResult
   summary: ExecutiveSummary | null
+  fundusImageBase64?: string | null
 }) {
   const response = await fetch(apiUrl('/v1/screenings/report.pdf'), {
     method: 'POST',
     headers: { Accept: 'application/pdf', 'Content-Type': 'application/json' },
-    body: JSON.stringify(options),
+    body: JSON.stringify({
+      screening: options.screening,
+      summary: options.summary,
+      fundus_image_base64: options.fundusImageBase64 || undefined,
+    }),
   })
   if (!response.ok) {
     const body = await response.json().catch(() => null) as { detail?: string } | null

@@ -3,10 +3,12 @@ import { Link, useNavigate, useSearch } from '@tanstack/react-router'
 import { SiteFooter } from '../components/SiteFooter'
 import { SiteHeader } from '../components/SiteHeader'
 import { BackArrowIcon } from '../components/BackArrowIcon'
+import { ScreeningPdfAction } from '../components/ScreeningPdfAction'
 import {
   deleteAccountHistory,
   getAccountHistory,
   getAccountPhoto,
+  screeningFromHistory,
   type HistoryFilters,
   type ScreeningHistoryItem,
 } from '../lib/screening-history'
@@ -237,6 +239,13 @@ export function ScreeningHistoryPage() {
                     </div>
                   )}
 
+                  <ScreeningPdfAction
+                    className="app-history-detail__pdf"
+                    screening={screeningFromHistory(selected)}
+                    summary={selected.executive_summary}
+                    imageUrl={selected.source === 'upload' ? selectedPhotoUrl : null}
+                    imageDownloadName={'nayana-foto-fundus-' + selected.id + '.jpg'}
+                  />
                   <p className="app-history-detail__note">Hasil ini adalah skrining awal dari satu foto fundus. Persentase menunjukkan kemiripan pola, bukan tingkat keparahan.</p>
                   <div className="app-history-detail__actions">
                     <Link className="app-primary-action" to="/history/$recordId/chat" params={{ recordId: selected.id }}>Mulai diskusi</Link>
