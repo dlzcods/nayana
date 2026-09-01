@@ -32,3 +32,11 @@ npm run build
 - `/terms` draft terms of use
 
 The product copy intentionally describes the classifier as a research prototype and preliminary screening aid, not a diagnosis or medical device.
+
+## PDF report service
+
+PDF reports use a dedicated lightweight Modal service so the download path does
+not wait for the TensorFlow inference runtime. Add the deployed report URL to
+the local web environment, then restart Vite:
+
+    VITE_NAYANA_REPORT_API_BASE_URL="https://URL-REPORT-ANDA.modal.run"

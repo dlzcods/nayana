@@ -13,23 +13,6 @@ type ScreeningPdfActionProps = {
 
 const maxPdfAttachmentBytes = 10 * 1024 * 1024
 
-function readBlobAsBase64(blob: Blob) {
-  return new Promise<string>((resolve, reject) => {
-    const reader = new FileReader()
-    reader.onload = () => {
-      const value = typeof reader.result === 'string' ? reader.result : ''
-      const separator = value.indexOf(',')
-      if (separator < 0) {
-        reject(new Error('Foto belum dapat disiapkan untuk PDF.'))
-        return
-      }
-      resolve(value.slice(separator + 1))
-    }
-    reader.onerror = () => reject(new Error('Foto belum dapat dibaca untuk PDF.'))
-    reader.readAsDataURL(blob)
-  })
-}
-
 export function ScreeningPdfAction({
   screening,
   summary,
@@ -48,15 +31,15 @@ export function ScreeningPdfAction({
     setState('loading')
     setError(null)
     try {
-      let fundusImageBase64: string | undefined
+      let fundusImage: Blob | undefined
       if (includeImage && imageUrl) {
         const imageResponse = await fetch(imageUrl)
         if (!imageResponse.ok) throw new Error('Foto fundus belum dapat dimuat untuk PDF.')
         const imageBlob = await imageResponse.blob()
         if (imageBlob.size > maxPdfAttachmentBytes) throw new Error('Foto fundus melebihi batas 10 MB untuk lampiran PDF.')
-        fundusImageBase64 = await readBlobAsBase64(imageBlob)
+        fundusImage = imageBlob
       }
-      const blob = await downloadScreeningPdf({ screening, summary, fundusImageBase64 })
+      const blob = await downloadScreeningPdf({ screening, summary, fundusImage })
       const url = URL.createObjectURL(blob)
       const anchor = document.createElement('a')
       anchor.href = url

@@ -83,11 +83,20 @@ export type SuggestedQuestion = {
 
 const configuredApiBase = import.meta.env.VITE_NAYANA_API_BASE_URL?.trim()
 const apiBase = (configuredApiBase || 'http://localhost:8000').replace(/\/$/, '')
+const configuredReportApiBase = import.meta.env.VITE_NAYANA_REPORT_API_BASE_URL?.trim()
+const reportApiBase = configuredReportApiBase?.replace(/\/$/, '') || ''
 const executiveSummaryRequests = new Map<string, Promise<ExecutiveSummary>>()
 const suggestedQuestionRequests = new Map<string, Promise<SuggestedQuestion[]>>()
 
 function apiUrl(path: string) {
   return `${apiBase}${path}`
+}
+
+function reportApiUrl(path: string) {
+  if (!reportApiBase) {
+    throw new Error('Layanan PDF belum dikonfigurasi. Tambahkan VITE_NAYANA_REPORT_API_BASE_URL.')
+  }
+  return reportApiBase + path
 }
 
 export function demoCaseImageUrl(caseId: string) {
@@ -210,17 +219,25 @@ export function getSuggestedQuestions(options: {
 export async function downloadScreeningPdf(options: {
   screening: ScreeningResult
   summary: ExecutiveSummary | null
-  fundusImageBase64?: string | null
+  fundusImage?: Blob | null
 }) {
-  const response = await fetch(apiUrl('/v1/screenings/report.pdf'), {
-    method: 'POST',
-    headers: { Accept: 'application/pdf', 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      screening: options.screening,
-      summary: options.summary,
-      fundus_image_base64: options.fundusImageBase64 || undefined,
-    }),
-  })
+  const formData = new FormData()
+  formData.set('screening', JSON.stringify(options.screening))
+  formData.set('summary', JSON.stringify(options.summary))
+  if (options.fundusImage) {
+    formData.set('fundus_image', options.fundusImage, 'nayana-foto-fundus.jpg')
+  }
+
+  let response: Response
+  try {
+    response = await fetch(reportApiUrl('/v1/screenings/report.pdf'), {
+      method: 'POST',
+      headers: { Accept: 'application/pdf' },
+      body: formData,
+    })
+  } catch {
+    throw new Error('Layanan PDF sedang tidak dapat dihubungi. Silakan coba lagi.')
+  }
   if (!response.ok) {
     const body = await response.json().catch(() => null) as { detail?: string } | null
     throw new Error(body?.detail || 'PDF belum dapat dibuat.')
