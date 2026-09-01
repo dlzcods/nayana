@@ -3,6 +3,8 @@
 Layanan skrining awal NAYANA. `app.py` mempertahankan prototipe Gradio dari
 Space sumber. `nayana_api.py` adalah API FastAPI untuk aplikasi web NAYANA.
 `modal_app.py` adalah entrypoint deploy Modal untuk API ini.
+`modal_report_app.py` adalah layanan PDF ringan yang terpisah dari runtime
+TensorFlow, sehingga pembuatan laporan tidak perlu menunggu cold start inference.
 
 ## Preview frontend tanpa inference lokal
 
@@ -40,6 +42,28 @@ sudah mengizinkan `http://localhost:5173` dan `http://localhost:5174` agar
 preview tetap bekerja bila port utama sedang dipakai. Saat domain frontend
 production sudah ada, set `NAYANA_WEB_ORIGINS` di runtime Modal ke domain
 tersebut secara eksplisit.
+
+## Deploy layanan PDF ringan
+
+Laporan PDF sekarang dijalankan oleh aplikasi Modal tersendiri. Aplikasi ini
+memasang hanya FastAPI, Pillow, dan ReportLab; tidak memuat SavedModel,
+TensorFlow, Gemini, atau secret. Jalankan sendiri setelah API utama tersedia:
+
+    cd apps/inference
+    modal deploy modal_report_app.py
+
+Tambahkan URL yang dicetak Modal ke `apps/web/.env.local`, lalu restart Vite:
+
+    VITE_NAYANA_REPORT_API_BASE_URL="https://URL-REPORT-ANDA.modal.run"
+
+Lampiran foto saat pengguna memilihnya dikirim sebagai multipart JPEG mentah,
+bukan base64 dalam JSON. Foto tetap digunakan hanya selama pembuatan PDF yang
+diunduh pengguna.
+
+Container laporan dipertahankan selama dua menit setelah request terakhir
+(`scaledown_window=120`) untuk mengurangi cold start pada sesi yang berdekatan.
+Ia tetap dapat scale ke nol setelah periode idle tersebut; `min_containers`
+tidak diaktifkan karena akan menambah biaya idle secara terus-menerus.
 
 ## Ringkasan otomatis
 

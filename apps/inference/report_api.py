@@ -1,0 +1,227 @@
+"""Dedicated lightweight API for NAYANA screening reports.
+
+This service intentionally has no TensorFlow model, Google GenAI client, or
+Supabase credential. It receives result data and an optional user-selected
+image attachment only for the lifetime of one PDF response.
+"""
+
+from __future__ import annotations
+
+from io import BytesIO
+import os
+from pathlib import Path
+from xml.sax.saxutils import escape
+
+from fastapi import FastAPI, File, Form, HTTPException, UploadFile
+from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import StreamingResponse
+from pydantic import BaseModel, Field, ValidationError
+from PIL import Image
+from starlette.concurrency import run_in_threadpool
+
+
+BASE_DIR = Path(__file__).resolve().parent
+MAX_PDF_IMAGE_BYTES = 10 * 1024 * 1024
+MIN_IMAGE_DIMENSION = 224
+
+
+class Prediction(BaseModel):
+    key: str = Field(min_length=1, max_length=80)
+    label: str = Field(min_length=1, max_length=120)
+    score: float = Field(ge=0, le=1)
+
+
+class ScreeningResult(BaseModel):
+    screening_id: str = Field(min_length=1, max_length=160)
+    source: str = Field(min_length=1, max_length=20)
+    model_version: str = Field(min_length=1, max_length=160)
+    top_prediction: Prediction
+    predictions: list[Prediction] = Field(min_length=1, max_length=12)
+    disclaimer: str = Field(min_length=1, max_length=1000)
+
+
+class ExecutiveSummary(BaseModel):
+    title: str = Field(min_length=1, max_length=180)
+    overview: str = Field(min_length=1, max_length=2400)
+    general_information: str = Field(min_length=1, max_length=3200)
+    common_factors: str = Field(min_length=1, max_length=3200)
+    what_to_notice: str = Field(min_length=1, max_length=3200)
+    next_step: str = Field(min_length=1, max_length=2400)
+    disclaimer: str = Field(min_length=1, max_length=1600)
+
+
+app = FastAPI(
+    title="NAYANA Report API",
+    version="0.1.0",
+    description="Layanan ringan pembuatan ringkasan PDF NAYANA.",
+)
+
+default_web_origins = "http://localhost:5173,http://localhost:5174"
+allowed_origins = [
+    origin.strip()
+    for origin in os.getenv("NAYANA_WEB_ORIGINS", default_web_origins).split(",")
+    if origin.strip()
+]
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=allowed_origins,
+    allow_credentials=False,
+    allow_methods=["GET", "POST"],
+    allow_headers=["Content-Type"],
+)
+
+
+def decode_pdf_attachment(image_bytes: bytes | None) -> tuple[BytesIO, int, int] | None:
+    """Validate a one-request attachment without persisting it."""
+
+    if not image_bytes:
+        return None
+    if len(image_bytes) > MAX_PDF_IMAGE_BYTES:
+        raise HTTPException(status_code=413, detail="Lampiran foto untuk PDF melebihi batas 10 MB.")
+    try:
+        image_buffer = BytesIO(image_bytes)
+        with Image.open(image_buffer) as image:
+            image.load()
+            width, height = image.size
+            if min(width, height) < MIN_IMAGE_DIMENSION:
+                raise ValueError("Foto terlalu kecil.")
+    except (OSError, ValueError) as error:
+        raise HTTPException(status_code=400, detail="Lampiran foto untuk PDF bukan gambar yang valid.") from error
+    image_buffer.seek(0)
+    return image_buffer, width, height
+
+
+def build_screening_pdf(screening: ScreeningResult, summary: ExecutiveSummary | None, image_bytes: bytes | None) -> BytesIO:
+    """Create a non-diagnostic PDF and, only when requested, an image appendix."""
+
+    from reportlab.lib.colors import HexColor
+    from reportlab.lib.pagesizes import A4
+    from reportlab.lib.styles import ParagraphStyle, getSampleStyleSheet
+    from reportlab.lib.units import mm
+    from reportlab.platypus import HRFlowable, Image as PdfImage, PageBreak, Paragraph, SimpleDocTemplate, Spacer, Table, TableStyle
+
+    buffer = BytesIO()
+    document = SimpleDocTemplate(
+        buffer,
+        pagesize=A4,
+        rightMargin=20 * mm,
+        leftMargin=20 * mm,
+        topMargin=18 * mm,
+        bottomMargin=18 * mm,
+        title="Ringkasan skrining awal NAYANA",
+    )
+    styles = getSampleStyleSheet()
+    ink = HexColor("#24252B")
+    blue = HexColor("#3F5FC7")
+    muted = HexColor("#5F6066")
+    story = []
+    logo_path = BASE_DIR / "assets" / "nayana-logo.png"
+    if logo_path.is_file():
+        story.append(PdfImage(str(logo_path), width=42 * mm, height=14 * mm, kind="proportional"))
+    else:
+        story.append(Paragraph("NAYANA", ParagraphStyle("brand", fontName="Helvetica-Bold", fontSize=22, textColor=ink)))
+    story.extend([
+        Spacer(1, 10 * mm),
+        Paragraph("RINGKASAN SKRINING AWAL", ParagraphStyle("kicker", fontName="Helvetica-Bold", fontSize=8, leading=10, textColor=blue)),
+        Spacer(1, 3 * mm),
+    ])
+    story.append(Paragraph(
+        "Pola paling mirip dengan " + escape(screening.top_prediction.label.lower()) + ".",
+        ParagraphStyle("title", fontName="Helvetica-Bold", fontSize=25, leading=29, textColor=ink),
+    ))
+    story.extend([
+        Spacer(1, 5 * mm),
+        Paragraph(
+            "Persentase berikut menunjukkan kemiripan pola dalam kategori model, bukan ukuran keparahan.",
+            ParagraphStyle("intro", fontName="Helvetica", fontSize=10, leading=15, textColor=muted),
+        ),
+        Spacer(1, 8 * mm),
+        HRFlowable(width="100%", color=HexColor("#D8D8D3"), thickness=.5),
+        Spacer(1, 4 * mm),
+    ])
+    rows = [[
+        Paragraph("Kategori", ParagraphStyle("head", fontName="Helvetica-Bold", fontSize=9, textColor=ink)),
+        Paragraph("Kemiripan pola", ParagraphStyle("head2", fontName="Helvetica-Bold", fontSize=9, textColor=ink)),
+    ]]
+    for prediction in screening.predictions:
+        rows.append([escape(prediction.label), f"{round(prediction.score * 100)}%"])
+    table = Table(rows, colWidths=[125 * mm, 45 * mm])
+    table.setStyle(TableStyle([
+        ("FONTNAME", (0, 1), (-1, -1), "Helvetica"),
+        ("FONTSIZE", (0, 1), (-1, -1), 10),
+        ("TEXTCOLOR", (0, 1), (-1, -1), ink),
+        ("LINEBELOW", (0, 0), (-1, -1), .5, HexColor("#D8D8D3")),
+        ("TOPPADDING", (0, 0), (-1, -1), 8),
+        ("BOTTOMPADDING", (0, 0), (-1, -1), 8),
+        ("ALIGN", (1, 0), (1, -1), "RIGHT"),
+    ]))
+    story.extend([table, Spacer(1, 10 * mm)])
+    if summary:
+        body_style = ParagraphStyle("body", fontName="Helvetica", fontSize=10, leading=15, textColor=muted)
+        heading_style = ParagraphStyle("section", fontName="Helvetica-Bold", fontSize=12, leading=15, textColor=ink, spaceBefore=7, spaceAfter=3)
+        story.append(Paragraph("Ringkasan edukatif", heading_style))
+        for label, text in (
+            ("Gambaran awal", summary.overview),
+            ("Tentang pola ini", summary.general_information),
+            ("Faktor umum", summary.common_factors),
+            ("Langkah berikutnya", summary.next_step),
+        ):
+            story.append(Paragraph(label, ParagraphStyle("label-" + label, fontName="Helvetica-Bold", fontSize=9, leading=13, textColor=blue, spaceBefore=5)))
+            story.append(Paragraph(escape(text), body_style))
+        story.append(Spacer(1, 6 * mm))
+        story.append(Paragraph(escape(summary.disclaimer), ParagraphStyle("disclaimer", fontName="Helvetica", fontSize=8.5, leading=12, textColor=muted)))
+    attachment = decode_pdf_attachment(image_bytes)
+    if attachment:
+        image_buffer, width, height = attachment
+        max_width = 170 * mm
+        max_height = 220 * mm
+        scale = min(max_width / width, max_height / height)
+        story.extend([
+            PageBreak(),
+            Paragraph("Lampiran foto fundus", ParagraphStyle("attachment-title", fontName="Helvetica-Bold", fontSize=17, leading=22, textColor=ink)),
+            Spacer(1, 3 * mm),
+            Paragraph(
+                "Foto ini disertakan atas pilihan pengguna sebagai referensi visual. Gunakan file foto terpisah bila detail atau pembesaran diperlukan.",
+                ParagraphStyle("attachment-note", fontName="Helvetica", fontSize=9, leading=13, textColor=muted),
+            ),
+            Spacer(1, 8 * mm),
+            PdfImage(image_buffer, width=width * scale, height=height * scale),
+        ])
+    story.extend([
+        Spacer(1, 7 * mm),
+        HRFlowable(width="100%", color=HexColor("#D8D8D3"), thickness=.5),
+        Spacer(1, 3 * mm),
+        Paragraph(
+            "NAYANA adalah pendamping edukasi dari foto fundus. Dokumen ini bukan penetapan kondisi medis dan tidak menggantikan pemeriksaan langsung oleh dokter spesialis mata (Sp.M).",
+            ParagraphStyle("footer", fontName="Helvetica", fontSize=8, leading=12, textColor=muted),
+        ),
+    ])
+    document.build(story)
+    buffer.seek(0)
+    return buffer
+
+
+@app.get("/v1/health")
+def health_check():
+    return {"status": "ready", "service": "report"}
+
+
+@app.post("/v1/screenings/report.pdf")
+async def create_screening_pdf(
+    screening: str = Form(...),
+    summary: str | None = Form(default=None),
+    fundus_image: UploadFile | None = File(default=None),
+):
+    try:
+        parsed_screening = ScreeningResult.model_validate_json(screening)
+        parsed_summary = ExecutiveSummary.model_validate_json(summary) if summary and summary != "null" else None
+    except ValidationError as error:
+        raise HTTPException(status_code=422, detail="Data hasil untuk PDF tidak valid.") from error
+    image_bytes = await fundus_image.read() if fundus_image else None
+    pdf = await run_in_threadpool(build_screening_pdf, parsed_screening, parsed_summary, image_bytes)
+    filename = "nayana-skrining-" + parsed_screening.screening_id + ".pdf"
+    return StreamingResponse(
+        pdf,
+        media_type="application/pdf",
+        headers={"Content-Disposition": 'attachment; filename="' + filename + '"'},
+    )
