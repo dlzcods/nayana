@@ -9,6 +9,7 @@ from __future__ import annotations
 
 from io import BytesIO
 import os
+import json
 from pathlib import Path
 from xml.sax.saxutils import escape
 
@@ -91,14 +92,19 @@ def decode_pdf_attachment(image_bytes: bytes | None) -> tuple[BytesIO, int, int]
     return image_buffer, width, height
 
 
-def build_screening_pdf(screening: ScreeningResult, summary: ExecutiveSummary | None, image_bytes: bytes | None) -> BytesIO:
+def build_screening_pdf(
+    screening: ScreeningResult,
+    summary: ExecutiveSummary | None,
+    image_bytes: bytes | None,
+    discussion_questions: list[dict[str, str]],
+) -> BytesIO:
     """Create a non-diagnostic PDF and, only when requested, an image appendix."""
 
     from reportlab.lib.colors import HexColor
     from reportlab.lib.pagesizes import A4
     from reportlab.lib.styles import ParagraphStyle, getSampleStyleSheet
     from reportlab.lib.units import mm
-    from reportlab.platypus import HRFlowable, Image as PdfImage, PageBreak, Paragraph, SimpleDocTemplate, Spacer, Table, TableStyle
+    from reportlab.platypus import HRFlowable, Image as PdfImage, KeepTogether, PageBreak, Paragraph, SimpleDocTemplate, Spacer, Table, TableStyle
 
     buffer = BytesIO()
     document = SimpleDocTemplate(
@@ -170,6 +176,24 @@ def build_screening_pdf(screening: ScreeningResult, summary: ExecutiveSummary | 
             story.append(Paragraph(escape(text), body_style))
         story.append(Spacer(1, 6 * mm))
         story.append(Paragraph(escape(summary.disclaimer), ParagraphStyle("disclaimer", fontName="Helvetica", fontSize=8.5, leading=12, textColor=muted)))
+    if discussion_questions:
+        question_label_style = ParagraphStyle("question-label", fontName="Helvetica-Bold", fontSize=8, leading=11, textColor=blue, spaceBefore=7, spaceAfter=2)
+        question_style = ParagraphStyle("question", fontName="Helvetica-Bold", fontSize=10, leading=15, textColor=ink, spaceAfter=3)
+        purpose_style = ParagraphStyle("question-purpose", fontName="Helvetica", fontSize=8.5, leading=12, textColor=muted, spaceAfter=5)
+        discussion_block = [
+            Spacer(1, 6 * mm),
+            Paragraph("Pertanyaan untuk diskusi dengan Sp.M", heading_style if summary else ParagraphStyle("kit-heading", fontName="Helvetica-Bold", fontSize=12, leading=15, textColor=ink)),
+            Paragraph("Pertanyaan ini dipilih pengguna untuk membantu memulai diskusi. Tujuannya menjelaskan informasi apa yang dapat dibantu dokter, bukan sebagai arahan medis.", ParagraphStyle("kit-note", fontName="Helvetica", fontSize=9, leading=13, textColor=muted)),
+        ]
+        for index, item in enumerate(discussion_questions[:3], start=1):
+            discussion_block.extend([
+                Paragraph(f"PERTANYAAN {index}", question_label_style),
+                Paragraph(escape(item["question"]), question_style),
+                Paragraph("<b>Tujuan:</b> " + escape(item["purpose"]), purpose_style),
+            ])
+        # The short section belongs on one page. Keeping it together avoids a
+        # heading or a single question being stranded at the page boundary.
+        story.append(KeepTogether(discussion_block))
     attachment = decode_pdf_attachment(image_bytes)
     if attachment:
         image_buffer, width, height = attachment
@@ -210,6 +234,7 @@ def health_check():
 async def create_screening_pdf(
     screening: str = Form(...),
     summary: str | None = Form(default=None),
+    discussion_questions: str | None = Form(default=None),
     fundus_image: UploadFile | None = File(default=None),
 ):
     try:
@@ -217,8 +242,28 @@ async def create_screening_pdf(
         parsed_summary = ExecutiveSummary.model_validate_json(summary) if summary and summary != "null" else None
     except ValidationError as error:
         raise HTTPException(status_code=422, detail="Data hasil untuk PDF tidak valid.") from error
+    try:
+        raw_questions = json.loads(discussion_questions) if discussion_questions else []
+        if not isinstance(raw_questions, list) or len(raw_questions) > 3:
+            raise ValueError("Pertanyaan tidak valid.")
+        parsed_questions = []
+        for item in raw_questions:
+            # Plain strings remain valid for earlier web clients. Newer clients
+            # send the associated purpose so the PDF is useful in consultation.
+            if isinstance(item, str):
+                question, purpose = item.strip(), "Pertanyaan ini dipilih untuk membantu memulai diskusi dengan dokter spesialis mata."
+            elif isinstance(item, dict):
+                question = item.get("question", "").strip() if isinstance(item.get("question"), str) else ""
+                purpose = item.get("purpose", "").strip() if isinstance(item.get("purpose"), str) else ""
+            else:
+                raise ValueError("Pertanyaan tidak valid.")
+            if not question or len(question) > 500 or not purpose or len(purpose) > 500:
+                raise ValueError("Pertanyaan tidak valid.")
+            parsed_questions.append({"question": question, "purpose": purpose})
+    except (ValueError, json.JSONDecodeError) as error:
+        raise HTTPException(status_code=422, detail="Pertanyaan diskusi untuk PDF tidak valid.") from error
     image_bytes = await fundus_image.read() if fundus_image else None
-    pdf = await run_in_threadpool(build_screening_pdf, parsed_screening, parsed_summary, image_bytes)
+    pdf = await run_in_threadpool(build_screening_pdf, parsed_screening, parsed_summary, image_bytes, parsed_questions)
     filename = "nayana-skrining-" + parsed_screening.screening_id + ".pdf"
     return StreamingResponse(
         pdf,

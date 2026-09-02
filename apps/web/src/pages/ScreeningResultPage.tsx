@@ -8,6 +8,9 @@ import { ScreeningChat } from '../components/ScreeningChat'
 import { ScreeningFinalizing } from '../components/ScreeningFinalizing'
 import { ScreeningPdfAction } from '../components/ScreeningPdfAction'
 import { ScreeningSaveActions } from '../components/ScreeningSaveActions'
+import { DiscussionKit } from '../components/DiscussionKit'
+import { ResultPathway } from '../components/ResultPathway'
+import { discussionQuestionsFor } from '../lib/discussion-questions'
 import {
   demoCaseIdFromScreeningId,
   demoCaseImageUrl,
@@ -26,6 +29,7 @@ export function ScreeningResultPage() {
   const [summaryError, setSummaryError] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [savedDestination, setSavedDestination] = useState<{ kind: 'account'; recordId: string } | { kind: 'browser' } | null>(null)
+  const [discussionQuestions, setDiscussionQuestions] = useState<string[]>([])
   const resultDetailRef = useRef<HTMLElement | null>(null)
 
   useEffect(() => {
@@ -37,6 +41,7 @@ export function ScreeningResultPage() {
     setSummaryError(null)
     setError(null)
     setSavedDestination(null)
+    setDiscussionQuestions([])
 
     void (async () => {
       const cached = getActiveScreening(screeningId)
@@ -81,6 +86,10 @@ export function ScreeningResultPage() {
       window.scrollTo({ top: Math.max(0, resultDetailRef.current!.offsetTop - 104), behavior: 'auto' })
     }, 0)
     return () => window.clearTimeout(timer)
+  }, [result])
+
+  useEffect(() => {
+    if (result) setDiscussionQuestions(discussionQuestionsFor(result).map((item) => item.question))
   }, [result])
 
   return (
@@ -145,18 +154,16 @@ export function ScreeningResultPage() {
 
               <ScreeningChat screening={result} summary={summary} savedDestination={savedDestination} />
 
-              <div className="screening-result__next">
-                <div>
-                  <span>Langkah selanjutnya</span>
-                  <p>Bawa hasil awal ini kepada dokter spesialis mata (Sp.M) untuk pemeriksaan lebih menyeluruh.</p>
-                </div>
+              <DiscussionKit screening={result} selectedQuestions={discussionQuestions} onChange={setDiscussionQuestions} />
+
+              <ResultPathway action={
                 <Link className="app-primary-action app-primary-action--back" to="/screening">
                   <BackArrowIcon />
                   Pilih foto atau contoh lain
                 </Link>
-              </div>
+              } />
 
-              <ScreeningPdfAction screening={result} summary={summary} />
+              <ScreeningPdfAction screening={result} summary={summary} discussionQuestions={discussionQuestions} />
 
               <p className="screening-result__disclaimer">{result.disclaimer}</p>
             </section>

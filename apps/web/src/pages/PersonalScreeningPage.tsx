@@ -6,6 +6,9 @@ import { ScreeningChat } from '../components/ScreeningChat'
 import { ScreeningFinalizing } from '../components/ScreeningFinalizing'
 import { ScreeningPdfAction } from '../components/ScreeningPdfAction'
 import { ScreeningSaveActions } from '../components/ScreeningSaveActions'
+import { DiscussionKit } from '../components/DiscussionKit'
+import { ResultPathway } from '../components/ResultPathway'
+import { discussionQuestionsFor } from '../lib/discussion-questions'
 import {
   getExecutiveSummary,
   getDemoCases,
@@ -68,6 +71,7 @@ export function PersonalScreeningPanel({ onProcessingChange }: PersonalScreening
   const [summaryError, setSummaryError] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [savedDestination, setSavedDestination] = useState<{ kind: 'account'; recordId: string } | { kind: 'browser' } | null>(null)
+  const [discussionQuestions, setDiscussionQuestions] = useState<string[]>([])
 
   const selectedDemo = cases.find((item) => item.id === selectedDemoId) || null
   const usingDemo = selectedDemo !== null
@@ -137,6 +141,7 @@ export function PersonalScreeningPanel({ onProcessingChange }: PersonalScreening
     setSummary(null)
     setSummaryError(null)
     setSavedDestination(null)
+    setDiscussionQuestions([])
     setError(null)
     if (fileInputRef.current) fileInputRef.current.value = ''
     window.scrollTo({ top: 0, behavior: 'auto' })
@@ -148,6 +153,7 @@ export function PersonalScreeningPanel({ onProcessingChange }: PersonalScreening
     setSummary(null)
     setSummaryError(null)
     setSavedDestination(null)
+    setDiscussionQuestions([])
     setError(null)
 
     if (!nextFile) {
@@ -182,6 +188,7 @@ export function PersonalScreeningPanel({ onProcessingChange }: PersonalScreening
     setSummary(null)
     setSummaryError(null)
     setSavedDestination(null)
+    setDiscussionQuestions([])
     setError(null)
     if (fileInputRef.current) fileInputRef.current.value = ''
   }
@@ -221,6 +228,7 @@ export function PersonalScreeningPanel({ onProcessingChange }: PersonalScreening
         setScreeningResult(result)
         setSummary(nextSummary)
         setSummaryError(nextSummaryError)
+        setDiscussionQuestions(discussionQuestionsFor(result).map((item) => item.question))
       }
     } catch (reason) {
       setError(
@@ -275,18 +283,16 @@ export function PersonalScreeningPanel({ onProcessingChange }: PersonalScreening
 
             <ScreeningChat screening={screeningResult} summary={summary} savedDestination={savedDestination} />
 
-            <div className="screening-result__next">
-              <div>
-                <span>Langkah selanjutnya</span>
-                <p>Bawa hasil awal ini kepada dokter spesialis mata (Sp.M) untuk pemeriksaan lebih menyeluruh.</p>
-              </div>
+            <DiscussionKit screening={screeningResult} selectedQuestions={discussionQuestions} onChange={setDiscussionQuestions} />
+
+            <ResultPathway action={
               <button className="app-primary-action app-primary-action--back" type="button" onClick={resetScreening}>
                 <BackArrowIcon />
                 Pilih foto atau contoh lain
               </button>
-            </div>
+            } />
 
-            <ScreeningPdfAction screening={screeningResult} summary={summary} />
+            <ScreeningPdfAction screening={screeningResult} summary={summary} discussionQuestions={discussionQuestions} />
 
             <p className="screening-result__disclaimer">{screeningResult.disclaimer}</p>
           </section>
@@ -325,7 +331,7 @@ export function PersonalScreeningPanel({ onProcessingChange }: PersonalScreening
               <div className="demo-picker__head">
                 <div>
                   <span>Atau gunakan contoh</span>
-                  <p id="demo-picker-title">Pilih satu contoh fundus untuk mencoba alur tanpa foto pribadi.</p>
+                  <p id="demo-picker-title">Pilih satu contoh fundus untuk mencoba alur NAYANA tanpa foto pribadi.</p>
                 </div>
                 <label>
                   <span className="sr-only">Pilih contoh fundus</span>
@@ -351,6 +357,7 @@ export function PersonalScreeningPanel({ onProcessingChange }: PersonalScreening
                   </button>
                 ))}
               </div>
+              <p className="demo-picker__flow" aria-label="Alur mode contoh">Pilih contoh → lihat hasil → baca ringkasan → siapkan diskusi → unduh PDF</p>
               {selectedDemo && <p className="demo-picker__selected">{selectedDemo.title} dipilih untuk mode contoh.</p>}
             </section>
 
@@ -406,6 +413,7 @@ export function PersonalScreeningPanel({ onProcessingChange }: PersonalScreening
             masuk akun, foto disimpan privat selama masa simpan yang Anda pilih. Contoh fundus berasal dari data uji
             dataset sumber dan tidak memuat data pribadi pengguna.
           </p>
+          <a href="/trust">Lihat privasi & cara kerja data</a>
         </aside>
       )}
     </>

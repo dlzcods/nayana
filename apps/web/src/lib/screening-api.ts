@@ -1,3 +1,5 @@
+import type { DiscussionQuestion } from './discussion-questions'
+
 export type DemoCase = {
   id: string
   title: string
@@ -220,10 +222,12 @@ export async function downloadScreeningPdf(options: {
   screening: ScreeningResult
   summary: ExecutiveSummary | null
   fundusImage?: Blob | null
+  discussionQuestions?: DiscussionQuestion[]
 }) {
   const formData = new FormData()
   formData.set('screening', JSON.stringify(options.screening))
   formData.set('summary', JSON.stringify(options.summary))
+  formData.set('discussion_questions', JSON.stringify((options.discussionQuestions || []).slice(0, 3)))
   if (options.fundusImage) {
     formData.set('fundus_image', options.fundusImage, 'nayana-foto-fundus.jpg')
   }

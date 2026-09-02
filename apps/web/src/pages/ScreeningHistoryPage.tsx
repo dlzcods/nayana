@@ -4,6 +4,8 @@ import { SiteFooter } from '../components/SiteFooter'
 import { SiteHeader } from '../components/SiteHeader'
 import { BackArrowIcon } from '../components/BackArrowIcon'
 import { ScreeningPdfAction } from '../components/ScreeningPdfAction'
+import { DiscussionKit } from '../components/DiscussionKit'
+import { discussionQuestionsFor } from '../lib/discussion-questions'
 import {
   deleteAccountHistory,
   getAccountHistory,
@@ -42,6 +44,7 @@ export function ScreeningHistoryPage() {
   const [filtersOpen, setFiltersOpen] = useState(false)
   const [photo, setPhoto] = useState<{ recordId: string; url: string | null; status: 'idle' | 'loading' | 'ready' | 'unavailable' }>({ recordId: '', url: null, status: 'idle' })
   const [deletingId, setDeletingId] = useState<string | null>(null)
+  const [discussionQuestions, setDiscussionQuestions] = useState<string[]>([])
 
   useEffect(() => { selectedIdRef.current = selectedIdFromUrl }, [selectedIdFromUrl])
 
@@ -89,6 +92,11 @@ export function ScreeningHistoryPage() {
   const selectedId = selected?.id || ''
   const selectedPhotoPath = selected?.photo_path || null
   const selectedPhotoUrl = photo.recordId === selected?.id ? photo.url : null
+
+  useEffect(() => {
+    if (selected) setDiscussionQuestions(discussionQuestionsFor(screeningFromHistory(selected)).map((item) => item.question))
+    else setDiscussionQuestions([])
+  }, [selected])
 
   useEffect(() => {
     const controller = new AbortController()
@@ -209,28 +217,32 @@ export function ScreeningHistoryPage() {
 
             {selected && (
               <section className="app-history-detail" aria-labelledby={`history-detail-${selected.id}`}>
-                <div className="app-history-detail__visual" aria-busy={photo.recordId === selected.id && photo.status === 'loading'}>
-                  {selectedPhotoUrl || selectedDemoImageUrl ? <img src={selectedPhotoUrl || selectedDemoImageUrl} alt={selectedPhotoUrl ? 'Foto fundus yang disimpan bersama hasil ini' : 'Foto fundus contoh yang dipilih'} /> : (
-                    <div className="app-history-detail__photo-empty">
-                      {photo.recordId === selected.id && photo.status === 'loading' ? 'Memuat foto…' : selected.photo_path ? 'Foto privat tidak tersedia' : 'Tidak ada foto tersimpan'}
-                    </div>
-                  )}
-                </div>
-                <div className="app-history-detail__body">
-                  <p className="app-kicker">Hasil skrining awal</p>
-                  <h2 id={`history-detail-${selected.id}`}>Pola tertinggi: {selected.top_prediction_label}</h2>
-                  <p className="app-history-detail__score">{percentage(selected.predictions.find((item) => item.key === selected.top_prediction_key)?.score || 0)} kemiripan pola</p>
-
-                  <div className="app-history-detail__probabilities" aria-label="Seluruh kemiripan pola">
-                    {selected.predictions.map((prediction) => (
-                      <div className={prediction.key === selected.top_prediction_key ? 'is-primary' : ''} key={prediction.key}>
-                        <span>{prediction.label}</span>
-                        <i><b style={{ width: `${Math.max(2, prediction.score * 100)}%` }} /></i>
-                        <strong>{percentage(prediction.score)}</strong>
+                <div className="app-history-detail__hero">
+                  <div className="app-history-detail__visual" aria-busy={photo.recordId === selected.id && photo.status === 'loading'}>
+                    {selectedPhotoUrl || selectedDemoImageUrl ? <img src={selectedPhotoUrl || selectedDemoImageUrl} alt={selectedPhotoUrl ? 'Foto fundus yang disimpan bersama hasil ini' : 'Foto fundus contoh yang dipilih'} /> : (
+                      <div className="app-history-detail__photo-empty">
+                        {photo.recordId === selected.id && photo.status === 'loading' ? 'Memuat foto…' : selected.photo_path ? 'Foto privat tidak tersedia' : 'Tidak ada foto tersimpan'}
                       </div>
-                    ))}
+                    )}
                   </div>
+                  <div className="app-history-detail__hero-copy">
+                    <p className="app-kicker">Hasil skrining awal</p>
+                    <h2 id={`history-detail-${selected.id}`}>Pola tertinggi: {selected.top_prediction_label}</h2>
+                    <p className="app-history-detail__score">{percentage(selected.predictions.find((item) => item.key === selected.top_prediction_key)?.score || 0)} kemiripan pola</p>
 
+                    <div className="app-history-detail__probabilities" aria-label="Seluruh kemiripan pola">
+                      {selected.predictions.map((prediction) => (
+                        <div className={prediction.key === selected.top_prediction_key ? 'is-primary' : ''} key={prediction.key}>
+                          <span>{prediction.label}</span>
+                          <i><b style={{ width: `${Math.max(2, prediction.score * 100)}%` }} /></i>
+                          <strong>{percentage(prediction.score)}</strong>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+
+                <div className="app-history-detail__content">
                   {selected.executive_summary && (
                     <div className="app-history-detail__summary">
                       <h3>{selected.executive_summary.title}</h3>
@@ -238,6 +250,12 @@ export function ScreeningHistoryPage() {
                       <p>{selected.executive_summary.next_step}</p>
                     </div>
                   )}
+
+                  <DiscussionKit
+                    screening={screeningFromHistory(selected)}
+                    selectedQuestions={discussionQuestions}
+                    onChange={setDiscussionQuestions}
+                  />
 
                   <ScreeningPdfAction
                     className="app-history-detail__pdf"
@@ -249,6 +267,7 @@ export function ScreeningHistoryPage() {
                       : 'nayana-gambar-contoh-' + selected.id + (selectedDemoImageUrl.endsWith('.jpg') ? '.jpg' : '.png')}
                     imageDownloadLabel={selected.source === 'upload' ? 'Unduh foto fundus (JPEG)' : 'Unduh gambar contoh'}
                     showImageOptions
+                    discussionQuestions={discussionQuestions}
                   />
                   <p className="app-history-detail__note">Hasil ini adalah skrining awal dari satu foto fundus. Persentase menunjukkan kemiripan pola, bukan tingkat keparahan.</p>
                   <div className="app-history-detail__actions">

@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { downloadScreeningPdf, type ExecutiveSummary, type ScreeningResult } from '../lib/screening-api'
+import { discussionQuestionsFor } from '../lib/discussion-questions'
 
 type ScreeningPdfActionProps = {
   screening: ScreeningResult
@@ -9,6 +10,7 @@ type ScreeningPdfActionProps = {
   imageDownloadName?: string
   imageDownloadLabel?: string
   showImageOptions?: boolean
+  discussionQuestions?: string[]
 }
 
 const maxPdfAttachmentBytes = 10 * 1024 * 1024
@@ -21,6 +23,7 @@ export function ScreeningPdfAction({
   imageDownloadName = 'nayana-foto-fundus.jpg',
   imageDownloadLabel = 'Unduh foto fundus',
   showImageOptions = false,
+  discussionQuestions = [],
 }: ScreeningPdfActionProps) {
   const [state, setState] = useState<'idle' | 'loading' | 'error'>('idle')
   const [error, setError] = useState<string | null>(null)
@@ -39,7 +42,9 @@ export function ScreeningPdfAction({
         if (imageBlob.size > maxPdfAttachmentBytes) throw new Error('Foto fundus melebihi batas 10 MB untuk lampiran PDF.')
         fundusImage = imageBlob
       }
-      const blob = await downloadScreeningPdf({ screening, summary, fundusImage })
+      const selectedDiscussionQuestions = discussionQuestionsFor(screening)
+        .filter((item) => discussionQuestions.includes(item.question))
+      const blob = await downloadScreeningPdf({ screening, summary, fundusImage, discussionQuestions: selectedDiscussionQuestions })
       const url = URL.createObjectURL(blob)
       const anchor = document.createElement('a')
       anchor.href = url
