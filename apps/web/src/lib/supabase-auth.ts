@@ -30,8 +30,6 @@ function saveSession(session: AuthSession) {
 function clearSession() {
   window.localStorage.removeItem(storageKey)
   window.dispatchEvent(new Event(authChangeEvent))
-  lastResolvedSession = null
-  lastResolutionAt = 0
 }
 
 export function getAuthSession(): AuthSession | null {
@@ -40,13 +38,13 @@ export function getAuthSession(): AuthSession | null {
     if (!raw) return null
     const parsed = JSON.parse(raw) as Partial<AuthSession>
     if (typeof parsed.accessToken !== 'string') return null
-    return {
+    return enrichLocalSession({
       accessToken: parsed.accessToken,
       refreshToken: typeof parsed.refreshToken === 'string' ? parsed.refreshToken : null,
       userId: typeof parsed.userId === 'string' ? parsed.userId : null,
       email: typeof parsed.email === 'string' ? parsed.email : null,
       displayName: typeof parsed.displayName === 'string' ? parsed.displayName : null,
-    }
+    })
   } catch {
     return null
   }
@@ -81,14 +79,41 @@ type RefreshedSessionResponse = {
 }
 
 let activeRefresh: Promise<AuthSession | null> | null = null
-let activeSessionResolution: Promise<AuthSession | null> | null = null
-let lastResolvedSession: AuthSession | null = null
-let lastResolutionAt = 0
-const sessionResolutionTtlMs = 30_000
+
+type AccessTokenClaims = {
+  sub?: string
+  email?: string
+  user_metadata?: {
+    full_name?: string | null
+    name?: string | null
+  }
+}
 
 function getDisplayName(user: SupabaseUser) {
   const candidate = user.user_metadata?.full_name || user.user_metadata?.name || null
   return candidate?.trim() || null
+}
+
+function accessTokenClaims(accessToken: string): AccessTokenClaims | null {
+  try {
+    const payload = accessToken.split('.')[1]
+    if (!payload) return null
+    const padded = payload.replace(/-/g, '+').replace(/_/g, '/').padEnd(Math.ceil(payload.length / 4) * 4, '=')
+    return JSON.parse(window.atob(padded)) as AccessTokenClaims
+  } catch {
+    return null
+  }
+}
+
+function enrichLocalSession(session: AuthSession): AuthSession {
+  const claims = accessTokenClaims(session.accessToken)
+  const displayName = claims?.user_metadata?.full_name || claims?.user_metadata?.name || session.displayName
+  return {
+    ...session,
+    userId: claims?.sub || session.userId,
+    email: claims?.email || session.email,
+    displayName: displayName?.trim() || null,
+  }
 }
 
 export async function hydrateAuthSession(session: AuthSession) {
@@ -148,21 +173,26 @@ async function refreshAuthSession(session: AuthSession): Promise<AuthSession | n
   if (activeRefresh) return activeRefresh
 
   activeRefresh = (async () => {
-    const response = await fetch(`${supabaseUrl}/auth/v1/token?grant_type=refresh_token`, {
-      method: 'POST',
-      headers: authHeaders(),
-      body: JSON.stringify({ refresh_token: session.refreshToken }),
-    })
+    let response: Response
+    try {
+      response = await fetch(`${supabaseUrl}/auth/v1/token?grant_type=refresh_token`, {
+        method: 'POST',
+        headers: authHeaders(),
+        body: JSON.stringify({ refresh_token: session.refreshToken }),
+      })
+    } catch {
+      throw new Error('Koneksi ke layanan akun sedang tidak tersedia. Periksa koneksi lalu coba lagi.')
+    }
     if (!response.ok) return null
 
     const refreshed = await response.json() as RefreshedSessionResponse
     if (!refreshed.access_token || !refreshed.refresh_token) return null
 
-    const nextSession: AuthSession = {
+    const nextSession = enrichLocalSession({
       ...session,
       accessToken: refreshed.access_token,
       refreshToken: refreshed.refresh_token,
-    }
+    })
     saveSession(nextSession)
     return nextSession
   })()
@@ -175,29 +205,13 @@ async function refreshAuthSession(session: AuthSession): Promise<AuthSession | n
 }
 
 export async function resolveAuthSession() {
-  const session = getAuthSession()
-  if (!session) return null
-  if (
-    lastResolvedSession?.accessToken === session.accessToken
-    && Date.now() - lastResolutionAt < sessionResolutionTtlMs
-  ) {
-    return lastResolvedSession
-  }
-  if (activeSessionResolution) return activeSessionResolution
-
-  activeSessionResolution = hydrateAuthSession(session)
-    .then((resolved) => {
-      lastResolvedSession = resolved
-      lastResolutionAt = Date.now()
-      return resolved
-    })
-    .finally(() => { activeSessionResolution = null })
-
-  return activeSessionResolution
+  // Rendering a signed-in state must not depend on an avoidable /auth/v1/user
+  // request. The token is verified by Supabase when a protected resource is used.
+  return getAuthSession()
 }
 
 export async function getAuthenticatedSupabaseHeaders() {
-  const session = await resolveAuthSession()
+  const session = getAuthSession()
   if (!supabaseUrl || !supabasePublishableKey || !session?.accessToken) {
     throw new Error('Masuk ke akun NAYANA untuk melanjutkan.')
   }
@@ -209,12 +223,32 @@ export async function getAuthenticatedSupabaseHeaders() {
 
 export async function authenticatedSupabaseFetch(path: string, init: RequestInit = {}) {
   if (!supabaseUrl) throw new Error('Penyimpanan akun belum dikonfigurasi.')
-  const headers = await getAuthenticatedSupabaseHeaders()
+  const session = getAuthSession()
+  if (!supabasePublishableKey || !session?.accessToken) {
+    throw new Error('Masuk ke akun NAYANA untuk melanjutkan.')
+  }
+  const request = async (accessToken: string) => fetch(`${supabaseUrl}${path}`, {
+    ...init,
+    headers: {
+      apikey: supabasePublishableKey,
+      Authorization: `Bearer ${accessToken}`,
+      ...init.headers,
+    },
+  })
+
+  let response: Response
   try {
-    return await fetch(`${supabaseUrl}${path}`, {
-      ...init,
-      headers: { ...headers, ...init.headers },
-    })
+    response = await request(session.accessToken)
+  } catch {
+    throw new Error('Koneksi ke layanan akun sedang tidak tersedia. Periksa koneksi lalu coba lagi.')
+  }
+
+  if ((response.status !== 401 && response.status !== 403) || !session.refreshToken) return response
+
+  const refreshed = await refreshAuthSession(session)
+  if (!refreshed) return response
+  try {
+    return await request(refreshed.accessToken)
   } catch {
     throw new Error('Koneksi ke layanan akun sedang tidak tersedia. Periksa koneksi lalu coba lagi.')
   }
@@ -225,16 +259,16 @@ export async function completeOAuthSession() {
   const accessToken = params.get('access_token')
   if (!accessToken) return null
 
-  const session: AuthSession = {
+  const session = enrichLocalSession({
     accessToken,
     refreshToken: params.get('refresh_token'),
     userId: null,
     email: null,
     displayName: null,
-  }
+  })
   saveSession(session)
   window.history.replaceState({}, document.title, window.location.pathname)
-  return hydrateAuthSession(session)
+  return session
 }
 
 export function signInWithGoogle() {

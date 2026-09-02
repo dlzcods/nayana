@@ -5,7 +5,7 @@ import {
   saveGuestHistory,
   type RetentionDays,
 } from '../lib/screening-history'
-import { getAuthSession, resolveAuthSession, type AuthSession } from '../lib/supabase-auth'
+import { authChangeEvent, getAuthSession, type AuthSession } from '../lib/supabase-auth'
 import { type ExecutiveSummary, type ScreeningResult } from '../lib/screening-api'
 
 type ScreeningSaveActionsProps = {
@@ -20,7 +20,6 @@ export function ScreeningSaveActions({ result, summary, normalizedImage, onSaved
   const [state, setState] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle')
   const [message, setMessage] = useState('')
   const [session, setSession] = useState<AuthSession | null>(() => getAuthSession())
-  const [isSessionLoading, setIsSessionLoading] = useState(() => Boolean(getAuthSession()))
   const hasAccount = Boolean(session?.userId)
 
   useEffect(() => {
@@ -29,11 +28,9 @@ export function ScreeningSaveActions({ result, summary, normalizedImage, onSaved
   }, [result.screening_id])
 
   useEffect(() => {
-    let active = true
-    void resolveAuthSession()
-      .then((nextSession) => { if (active) setSession(nextSession) })
-      .finally(() => { if (active) setIsSessionLoading(false) })
-    return () => { active = false }
+    const syncSession = () => setSession(getAuthSession())
+    window.addEventListener(authChangeEvent, syncSession)
+    return () => window.removeEventListener(authChangeEvent, syncSession)
   }, [])
 
   async function save() {
@@ -67,11 +64,7 @@ export function ScreeningSaveActions({ result, summary, normalizedImage, onSaved
             : 'Tanpa akun, ringkasan hasil tersimpan lokal selama 3 hari. Foto tidak disimpan.'}
         </p>
       </div>
-      {isSessionLoading ? (
-        <div className="screening-save__controls screening-save__controls--loading" aria-live="polite">
-          <span>Menyiapkan pilihan penyimpanan…</span>
-        </div>
-      ) : hasAccount ? (
+      {hasAccount ? (
         <div className="screening-save__controls">
           <label>
             <span>Masa simpan</span>

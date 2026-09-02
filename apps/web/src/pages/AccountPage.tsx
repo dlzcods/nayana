@@ -4,7 +4,6 @@ import { SiteFooter } from '../components/SiteFooter'
 import { SiteHeader } from '../components/SiteHeader'
 import {
   getAuthSession,
-  hydrateAuthSession,
   signOut,
   type AuthSession,
 } from '../lib/supabase-auth'
@@ -14,26 +13,12 @@ function firstName(name: string | null) {
 }
 
 export function AccountPage() {
-  const [session, setSession] = useState<AuthSession | null>(getAuthSession())
-  const [connectionMessage, setConnectionMessage] = useState<string | null>(null)
-
+  const [session] = useState<AuthSession | null>(getAuthSession())
   useEffect(() => {
     const existingSession = getAuthSession()
     if (!existingSession) {
       window.location.replace('/login')
-      return
     }
-    void hydrateAuthSession(existingSession)
-      .then((nextSession) => {
-        if (!nextSession) {
-          window.location.replace('/login')
-          return
-        }
-        setSession(nextSession)
-      })
-      .catch((reason) => {
-        setConnectionMessage(reason instanceof Error ? reason.message : 'Koneksi akun belum dapat diperiksa.')
-      })
   }, [])
 
   if (!session) return null
@@ -57,8 +42,6 @@ export function AccountPage() {
             </button>
           </div>
         </section>
-        {connectionMessage && <p className="app-auth__message" role="status">{connectionMessage}</p>}
-
         <section className="app-history" aria-labelledby="history-title">
           <div className="app-history__head">
             <div>

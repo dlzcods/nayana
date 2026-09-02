@@ -5,7 +5,6 @@ import { SiteHeader } from '../components/SiteHeader'
 import {
   completeOAuthSession,
   getAuthSession,
-  hydrateAuthSession,
   isSupabaseConfigured,
   signInWithGoogle,
   signOut,
@@ -25,7 +24,9 @@ export function LoginPage() {
       try {
         const callbackSession = await completeOAuthSession()
         const existingSession = callbackSession || getAuthSession()
-        const nextSession = existingSession ? await hydrateAuthSession(existingSession) : null
+        // The OAuth callback has already provided a signed token. Do not make
+        // an additional profile request before allowing the user into the app.
+        const nextSession = existingSession
         if (!active) return
 
         if (nextSession) {

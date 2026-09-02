@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import { SiteFooter } from '../components/SiteFooter'
 import { SiteHeader } from '../components/SiteHeader'
 import { PersonalScreeningPanel } from './PersonalScreeningPage'
-import { getAuthSession, hydrateAuthSession, type AuthSession } from '../lib/supabase-auth'
+import { getAuthSession, type AuthSession } from '../lib/supabase-auth'
 
 function firstName(name: string | null) {
   return name?.trim().split(/\s+/)[0] || 'Anda'
@@ -11,7 +11,7 @@ function firstName(name: string | null) {
 export function ScreeningPage() {
   const welcomeHandled = useRef(false)
   const [isProcessing, setIsProcessing] = useState(false)
-  const [welcomeSession, setWelcomeSession] = useState<AuthSession | null>(() => {
+  const [welcomeSession] = useState<AuthSession | null>(() => {
     const isWelcome = new URLSearchParams(window.location.search).get('welcome') === '1'
     return isWelcome ? getAuthSession() : null
   })
@@ -20,7 +20,6 @@ export function ScreeningPage() {
     if (!welcomeSession || welcomeHandled.current) return
     welcomeHandled.current = true
     window.history.replaceState({}, document.title, window.location.pathname)
-    if (!welcomeSession.displayName) void hydrateAuthSession(welcomeSession).then(setWelcomeSession)
   }, [welcomeSession])
 
   return (
