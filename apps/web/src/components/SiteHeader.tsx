@@ -50,11 +50,12 @@ export function SiteHeader() {
         <button
           className="optic-menu"
           type="button"
+          aria-label={open ? 'Tutup menu' : 'Buka menu'}
           aria-expanded={open}
           aria-controls="optic-mobile-nav"
           onClick={() => setOpen((value) => !value)}
         >
-          <span>{open ? 'Tutup' : 'Menu'}</span><i aria-hidden="true" />
+          <i aria-hidden="true" />
         </button>
       </div>
       {open && (

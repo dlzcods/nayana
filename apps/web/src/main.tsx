@@ -42,6 +42,12 @@ const termsRoute = createRoute({
   component: () => <LegalPage kind="terms" />,
 })
 
+const trustRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: '/trust',
+  component: () => <LegalPage kind="trust" />,
+})
+
 const screeningRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: '/screening',
@@ -97,6 +103,7 @@ const routeTree = rootRoute.addChildren([
   indexRoute,
   evidenceRoute,
   termsRoute,
+  trustRoute,
   screeningRoute,
   personalScreeningRoute,
   loginRoute,

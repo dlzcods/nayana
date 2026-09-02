@@ -16,6 +16,7 @@ export function SiteFooter() {
         </div>
         <div className="footer-links">
           <span>Kepercayaan</span>
+          <a href="/trust">Privasi & data</a>
           <a href="/terms">Ketentuan penggunaan</a>
         </div>
       </div>
