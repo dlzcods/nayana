@@ -186,7 +186,10 @@ app = FastAPI(
     description="API demo skrining awal NAYANA. Bukan penetapan kondisi medis.",
 )
 
-default_web_origins = "http://localhost:5173,http://localhost:5174"
+default_web_origins = (
+    "http://localhost:5173,http://localhost:5174,"
+    "https://nayana.dielz032.workers.dev"
+)
 allowed_origins = [
     origin.strip()
     for origin in os.getenv("NAYANA_WEB_ORIGINS", default_web_origins).split(",")

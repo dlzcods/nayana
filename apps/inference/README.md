@@ -38,10 +38,10 @@ VITE_NAYANA_API_BASE_URL="https://URL-API-ANDA.modal.run"
 ```
 
 Lalu jalankan ulang `npm run dev:web` dari root project. CORS default API
-sudah mengizinkan `http://localhost:5173` dan `http://localhost:5174` agar
-preview tetap bekerja bila port utama sedang dipakai. Saat domain frontend
-production sudah ada, set `NAYANA_WEB_ORIGINS` di runtime Modal ke domain
-tersebut secara eksplisit.
+sudah mengizinkan `http://localhost:5173`, `http://localhost:5174`,
+`https://nayana.dielz032.workers.dev`.
+`NAYANA_WEB_ORIGINS` tetap dapat digunakan untuk mengganti daftar tersebut
+secara eksplisit pada runtime yang memasang environment variable itu.
 
 ## Deploy layanan PDF ringan
 
