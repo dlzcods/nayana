@@ -8,7 +8,7 @@ from rag.common import sources
 from rag.prepare import sections, split_text, token_count
 from rag.citations import validate_answer, parse_json
 from rag.retrieve import contextual_query
-from rag.service import load_cached_suggestions, persist_suggestions, suggestion_pack
+from rag.service import answer_question, load_cached_suggestions, persist_suggestions, suggestion_pack
 
 
 class Tokenizer:
@@ -76,6 +76,33 @@ def test_same_source_number_reused_and_excerpt_server_owned():
     assert len(response.citations) == 1
     assert response.answer.count("[1]") == 2
     assert response.citations[0].excerpt == "Original NEI text."
+
+
+def test_chunks_from_one_article_coalesce_into_one_user_reference():
+    first = evidence()[0]
+    second = {**first, "id": "chunk2", "heading": "Symptoms", "text": "Second original excerpt."}
+    value = {"status": "grounded", "blocks": [
+        {"text": "First claim.", "kind": "evidence", "source_ids": ["chunk1"]},
+        {"text": "Second claim.", "kind": "evidence", "source_ids": ["chunk2"]},
+    ]}
+    response = validate_answer(value, [first, second], "nei-test")
+    assert len(response.citations) == 1
+    assert response.answer.count("[1]") == 2
+    assert response.citations[0].sections == ["Causes", "Symptoms"]
+
+
+def test_relevant_evidence_gets_one_repair_before_abstaining():
+    row = {**evidence()[0], "source_id": "cataracts", "topic": "cataract",
+           "heading": "Other details", "corpus_version": "nei-test", "score": .8,
+           "start": 0, "end": 10}
+    class FakeRetriever:
+        version = "nei-test"
+        chunks = [row]
+        def search(self, _query, limit=4): return [row]
+    replies = iter([json.dumps({"status": "insufficient_evidence", "blocks": []}), json.dumps(draft())])
+    with patch("rag.service.get_retriever", return_value=FakeRetriever()):
+        response = answer_question("Tolong jelaskan hal ini lebih lanjut", [], "cataract", {}, lambda *_: next(replies))
+    assert response.source_status == "grounded"
 
 
 @pytest.mark.parametrize("value", [draft([]), draft(["fabricated"]),

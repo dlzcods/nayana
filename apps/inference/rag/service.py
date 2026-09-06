@@ -32,12 +32,23 @@ def answer_question(question: str, history: list[dict], topic: str, context: dic
         evidence = list({row["id"]: row for row in urgent + evidence}.values())
     payload = {"question": question, "conversation": history[-6:],
                "screening_context": context, "evidence": evidence_payload(evidence)}
-    # One bounded repair for malformed JSON/missing IDs. No silent ungrounded fallback.
+    # One bounded repair covers malformed JSON/missing IDs. A separate repair is
+    # used when the model abstains despite clearly retrieved evidence; we still
+    # preserve abstention for genuinely unsupported requests.
     for attempt in range(2):
-        text = complete(GROUNDING_INSTRUCTION + ("\nFormat JSON/ID sumber sebelumnya tidak valid. Perbaiki tanpa menambah klaim." if attempt else ""),
+        repair = ""
+        if attempt:
+            repair = (
+                "\nEvidence yang diberikan memuat bagian relevan untuk pertanyaan ini. "
+                "Jawab bagian yang benar-benar didukung evidence tersebut; gunakan insufficient_evidence "
+                "hanya bila detail yang ditanyakan memang tidak ada di evidence. Jangan menambah klaim."
+            )
+        text = complete(GROUNDING_INSTRUCTION + repair,
                         json.dumps(payload, ensure_ascii=False))
         try:
-            return validate_answer(parse_json(text), evidence, retriever.version)
+            result = validate_answer(parse_json(text), evidence, retriever.version)
+            if result.source_status != "insufficient_evidence" or attempt:
+                return result
         except (ValueError, TypeError):
             if attempt:
                 raise ValueError("Grounded answer validation failed") from None

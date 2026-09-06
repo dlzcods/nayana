@@ -41,6 +41,10 @@ class Citation(BaseModel):
     chunk_id: str
     title: str
     heading: str
+    # A response may use several chunks from one NEI article. Users should see
+    # one article-level reference, while the sections retain the traceability
+    # needed to inspect what part of that article supported the response.
+    sections: list[str] = Field(default_factory=list, max_length=8)
     url: str
     excerpt: str
     corpus_version: str
@@ -87,13 +91,34 @@ def insufficient(version: str | None) -> GroundedResponse:
         source_status="insufficient_evidence", corpus_version=version)
 
 
+def citation_from_rows(rows: list[dict], version: str) -> list[Citation]:
+    """Coalesce chunk provenance into one readable reference per article URL."""
+    allowed_urls = {row["url"] for row in sources()}
+    citations: dict[str, Citation] = {}
+    for row in rows:
+        if row["url"] not in allowed_urls or row["corpus_version"] != version:
+            raise ValueError("Citation provenance mismatch")
+        citation = citations.get(row["url"])
+        if citation is None:
+            citation = Citation(
+                id=len(citations) + 1, chunk_id=row["id"], title=row["title"],
+                heading=row["heading"], sections=[row["heading"]], url=row["url"],
+                excerpt=row["text"], corpus_version=version,
+                source_updated_at=row.get("source_updated_at"), fetched_at=row["fetched_at"],
+            )
+            citations[row["url"]] = citation
+        elif row["heading"] not in citation.sections:
+            citation.sections.append(row["heading"])
+    return list(citations.values())
+
+
 def validate_answer(value: dict, evidence: list[dict], version: str) -> GroundedResponse:
     draft = Draft.model_validate(value)
     if draft.status == "insufficient_evidence":
         return insufficient(version)
     by_id = {row["id"]: row for row in evidence}
     allowed_urls = {row["url"] for row in sources()}
-    citations: dict[str, Citation] = {}
+    citations_by_url: dict[str, Citation] = {}
     paragraphs = []
     for block in draft.blocks:
         text = block.text.strip()
@@ -110,15 +135,20 @@ def validate_answer(value: dict, evidence: list[dict], version: str) -> Grounded
             row = by_id[source_id]
             if row["url"] not in allowed_urls or row["corpus_version"] != version:
                 raise ValueError("Citation provenance mismatch")
-            if source_id not in citations:
-                citations[source_id] = Citation(
-                    id=len(citations) + 1, chunk_id=source_id, title=row["title"],
-                    heading=row["heading"], url=row["url"], excerpt=row["text"],
+            citation = citations_by_url.get(row["url"])
+            if citation is None:
+                citation = Citation(
+                    id=len(citations_by_url) + 1, chunk_id=source_id, title=row["title"],
+                    heading=row["heading"], sections=[row["heading"]], url=row["url"], excerpt=row["text"],
                     corpus_version=version, source_updated_at=row.get("source_updated_at"),
                     fetched_at=row["fetched_at"])
-            markers.append(f"[{citations[source_id].id}]")
+                citations_by_url[row["url"]] = citation
+            elif row["heading"] not in citation.sections:
+                citation.sections.append(row["heading"])
+            markers.append(f"[{citation.id}]")
         paragraphs.append(text + (" " + "".join(markers) if markers else ""))
     answer = "\n\n".join(paragraphs)
+    citations = list(citations_by_url.values())
     if not citations or not answer or len(answer) > 4000:
         raise ValueError("Unsupported, empty or oversized grounded answer")
-    return GroundedResponse(answer=answer, citations=list(citations.values()), corpus_version=version)
+    return GroundedResponse(answer=answer, citations=citations, corpus_version=version)
