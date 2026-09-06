@@ -1,4 +1,4 @@
-import { Fragment, useEffect, useRef, useState, type ReactNode } from 'react'
+import { Fragment, useEffect, useLayoutEffect, useRef, useState, type ReactNode } from 'react'
 import { Link, useParams } from '@tanstack/react-router'
 import { SiteHeader } from '../components/SiteHeader'
 import { BackArrowIcon } from '../components/BackArrowIcon'
@@ -27,7 +27,11 @@ function renderInlineMarkdown(text: string, renderCitation: (text: string) => Re
   })
 }
 
-export function ChatMessageContent({ text, citations }: { text: string; citations?: ChatCitation[] }) {
+export function ChatMessageContent({ text, citations, onCitationOpen }: {
+  text: string
+  citations?: ChatCitation[]
+  onCitationOpen?: () => void
+}) {
   const blocks: Array<{ kind: 'paragraph' | 'list'; lines: string[] }> = []
   let paragraph: string[] = []
   let list: string[] = []
@@ -62,7 +66,7 @@ export function ChatMessageContent({ text, citations }: { text: string; citation
   flushList()
 
   return (
-    <ChatSources text={text} citations={citations} renderText={(_text, renderCitation) => <>
+    <ChatSources text={text} citations={citations} onCitationOpen={onCitationOpen} renderText={(_text, renderCitation) => <>
       {blocks.map((block, index) => block.kind === 'list' ? (
         <ul key={index}>{block.lines.map((line, lineIndex) => <li key={lineIndex}>{renderInlineMarkdown(line, renderCitation)}</li>)}</ul>
       ) : <p key={index}>{renderInlineMarkdown(block.lines[0], renderCitation)}</p>)}
@@ -79,12 +83,15 @@ export function ScreeningChatPage() {
   const [isLoadingContext, setIsLoadingContext] = useState(true)
   const [isSending, setIsSending] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [failedQuestion, setFailedQuestion] = useState<string | null>(null)
+  const [overviewPreference, setOverviewPreference] = useState<'auto' | 'expanded' | 'collapsed'>('auto')
   const [temporaryAccessApproved, setTemporaryAccessApproved] = useState(() => getActiveScreening(screeningId)?.chatAccess === 'temporary')
   const initialQuestionSent = useRef(false)
   const roomEpoch = useRef(0)
   const sending = useRef(false)
   const messagesRef = useRef<HTMLDivElement | null>(null)
   const shouldFollowMessages = useRef(false)
+  const initialMessagesPositioned = useRef(false)
   const requestedQuestion = new URLSearchParams(window.location.search).get('question')?.trim() || ''
 
   useEffect(() => {
@@ -97,8 +104,11 @@ export function ScreeningChatPage() {
     setDraft('')
     setIsLoadingContext(true)
     setError(null)
+    setFailedQuestion(null)
+    setOverviewPreference('auto')
     setMessages(getSessionChat(screeningId))
     initialQuestionSent.current = false
+    initialMessagesPositioned.current = false
     setTemporaryAccessApproved(getActiveScreening(screeningId)?.chatAccess === 'temporary')
 
     void (async () => {
@@ -143,32 +153,46 @@ export function ScreeningChatPage() {
     return () => { active = false; roomEpoch.current += 1 }
   }, [screeningId])
 
-  async function sendQuestion(question: string, cachedAnswer?: SuggestedQuestion) {
+  async function sendQuestion(question: string, cachedAnswer?: SuggestedQuestion, retry = false) {
     const cleanQuestion = question.trim()
     if (!cleanQuestion || !screening || sending.current) return
     sending.current = true
     const epoch = roomEpoch.current
-    const nextMessages = [...messages, { role: 'user' as const, content: cleanQuestion }]
-    setMessages(nextMessages)
-    saveSessionChat(screeningId, nextMessages)
+    const latestMessage = messages.at(-1)
+    const isRetryingStoredQuestion = retry
+      && latestMessage?.role === 'user'
+      && latestMessage.content.trim() === cleanQuestion
+    const nextMessages = isRetryingStoredQuestion
+      ? messages
+      : [...messages, { role: 'user' as const, content: cleanQuestion }]
+    if (!isRetryingStoredQuestion) {
+      setMessages(nextMessages)
+      saveSessionChat(screeningId, nextMessages)
+    }
     setDraft('')
     setError(null)
+    setFailedQuestion(null)
     setIsSending(true)
     shouldFollowMessages.current = true
     try {
       if (cachedAnswer) {
         const completed: ScreeningChatMessage[] = [...nextMessages, { ...cachedAnswer, role: 'assistant', content: cachedAnswer.answer.trim() }]
         setMessages(completed)
+        setFailedQuestion(null)
         if (!saveSessionChat(screeningId, completed)) setError('Jawaban tampil, tetapi browser belum dapat menyimpan sesi ini untuk dimuat ulang.')
       } else {
         const response = await askScreeningQuestion({ screening, summary, messages: nextMessages })
         if (epoch !== roomEpoch.current) return
         const completed: ScreeningChatMessage[] = [...nextMessages, { ...response, role: 'assistant', content: response.answer.trim() }]
         setMessages(completed)
+        setFailedQuestion(null)
         if (!saveSessionChat(screeningId, completed)) setError('Jawaban tampil, tetapi browser belum dapat menyimpan sesi ini untuk dimuat ulang.')
       }
     } catch (reason) {
-      if (epoch === roomEpoch.current) setError(reason instanceof Error ? reason.message : 'Jawaban belum dapat dibuat.')
+      if (epoch === roomEpoch.current) {
+        setError(reason instanceof Error ? reason.message : 'Jawaban belum dapat dibuat.')
+        setFailedQuestion(cleanQuestion)
+      }
     } finally {
       if (epoch === roomEpoch.current) { sending.current = false; setIsSending(false) }
     }
@@ -195,6 +219,15 @@ export function ScreeningChatPage() {
     messagesRef.current.scrollTo({ top: messagesRef.current.scrollHeight, behavior: 'smooth' })
   }, [messages, isSending])
 
+  // A short chat belongs just above the composer; an existing long chat should
+  // open on its newest message. This is intentionally a one-time positioning
+  // step, so it never pulls someone away while they read older messages.
+  useLayoutEffect(() => {
+    if (initialMessagesPositioned.current || !messages.length || !messagesRef.current) return
+    messagesRef.current.scrollTop = messagesRef.current.scrollHeight
+    initialMessagesPositioned.current = true
+  }, [messages])
+
   function continueWithoutSaving() {
     setActiveScreeningChatAccess(screeningId, 'temporary')
     setTemporaryAccessApproved(true)
@@ -206,22 +239,36 @@ export function ScreeningChatPage() {
   const imageUrl = screening?.case_id
     ? demoCaseImageUrl(screening.case_id)
     : demoCaseImageUrl(demoCaseIdFromScreeningId(screeningId) || '')
+  const overviewExpanded = overviewPreference === 'expanded'
+    || (overviewPreference === 'auto' && messages.length === 0 && !isSending)
+  const overviewToggleLabel = overviewExpanded ? 'Sembunyikan ringkasan' : 'Tampilkan ringkasan'
+  const compactResultLabel = screening
+    ? `${screening.top_prediction.label} · ${Math.round(screening.top_prediction.score * 100)}% kemiripan pola`
+    : 'Ringkasan hasil'
+
+  function toggleOverview() {
+    setOverviewPreference(overviewExpanded ? 'collapsed' : 'expanded')
+  }
 
   return (
     <div className="app-page app-page--chat">
       <SiteHeader />
       <main className="app-history-chat app-history-chat--temporary" aria-busy={isLoadingContext}>
-        <aside className="app-history-chat__context">
+        <aside className={`app-history-chat__context ${overviewExpanded ? 'is-expanded' : 'is-collapsed'}`}>
           <a className="app-chat-room__back" href={backPath}><BackArrowIcon /> Kembali ke hasil</a>
           {screening && (
-            <div className="app-history-chat__mobile-heading">
-              <p className="app-kicker">Ruang percakapan</p>
-              <h2>Tanyakan hasil ini dengan tenang.</h2>
-              <p>Jawaban bersifat edukatif dan membantu Anda menyiapkan diskusi dengan dokter spesialis mata (Sp.M).</p>
-            </div>
-          )}
-          {screening && (
             <>
+              <button type="button" className="app-history-chat__overview-toggle" aria-expanded={overviewExpanded}
+                onClick={toggleOverview}>
+                <span><small>Ruang percakapan</small><strong>{compactResultLabel}</strong></span>
+                <span aria-hidden="true">{overviewExpanded ? '⌃' : '⌄'}</span>
+              </button>
+              <div className="app-history-chat__mobile-overview">
+                <div className="app-history-chat__mobile-heading">
+                  <p className="app-kicker">Ruang percakapan</p>
+                  <h2>Tanyakan hasil ini dengan tenang.</h2>
+                  <p>Jawaban bersifat edukatif dan membantu Anda menyiapkan diskusi dengan dokter spesialis mata (Sp.M).</p>
+                </div>
               <div className="app-history-chat__result">
                 {imageUrl ? <img src={imageUrl} alt="Fundus dari hasil skrining terpilih" /> : <span aria-hidden="true" />}
                 <div>
@@ -231,6 +278,7 @@ export function ScreeningChatPage() {
                 </div>
               </div>
               <p className="app-history-chat__note">Percakapan sementara ini tidak menyimpan foto atau pesan ke riwayat akun.</p>
+              </div>
             </>
           )}
         </aside>
@@ -248,10 +296,16 @@ export function ScreeningChatPage() {
 
           {screening && temporaryAccessApproved && (
             <>
-              <header>
-                <p className="app-kicker">Ruang percakapan</p>
-                <h2 id="chat-title">Tanyakan hasil ini dengan tenang.</h2>
-                <p>Jawaban bersifat edukatif dan membantu Anda menyiapkan diskusi dengan dokter spesialis mata (Sp.M).</p>
+              <header className={`app-history-chat__thread-overview ${overviewExpanded ? 'is-expanded' : 'is-collapsed'}`}>
+                <button type="button" className="app-history-chat__thread-toggle" aria-expanded={overviewExpanded} onClick={toggleOverview}>
+                  <span className="app-kicker">Ruang percakapan</span>
+                  <span>{overviewExpanded ? overviewToggleLabel : compactResultLabel}</span>
+                  <span aria-hidden="true">{overviewExpanded ? '⌃' : '⌄'}</span>
+                </button>
+                <div className="app-history-chat__thread-overview-copy">
+                  <h2 id="chat-title">Tanyakan hasil ini dengan tenang.</h2>
+                  <p>Jawaban bersifat edukatif dan membantu Anda menyiapkan diskusi dengan dokter spesialis mata (Sp.M).</p>
+                </div>
               </header>
               {messages.length === 0 && !isSending && (
                 <SuggestedQuestionStarter screening={screening} summary={summary} onSelect={(item: SuggestedQuestion) => { void sendQuestion(item.question, item) }} />
@@ -265,10 +319,10 @@ export function ScreeningChatPage() {
                   shouldFollowMessages.current = element.scrollHeight - element.scrollTop - element.clientHeight < 40
                 }}
               >
-                {messages.map((message, index) => <div className={`app-chat-bubble app-chat-bubble--${message.role}`} key={`${message.role}-${index}`}><ChatMessageContent text={message.content} citations={message.citations} /></div>)}
+                {messages.map((message, index) => <div className={`app-chat-bubble app-chat-bubble--${message.role}`} key={`${message.role}-${index}`}><ChatMessageContent text={message.content} citations={message.citations} onCitationOpen={() => setOverviewPreference('collapsed')} /></div>)}
                 {isSending && <div className="app-chat-bubble app-chat-bubble--loading" aria-label="Menyiapkan penjelasan"><span /><span /><span /><p>Menyusun penjelasan…</p></div>}
               </div>
-              {error && <p className="app-chat-thread__error" role="alert">{error}</p>}
+              {error && <div className="app-chat-thread__error" role="alert"><p>{error}</p>{failedQuestion && <button type="button" onClick={() => { void sendQuestion(failedQuestion, undefined, true) }}>Coba lagi</button>}</div>}
               <form className="app-history-chat__compose" onSubmit={(event) => { event.preventDefault(); void sendQuestion(draft) }}>
                 <label className="sr-only" htmlFor="chat-room-input">Tulis pertanyaan tentang hasil ini</label>
                 <input id="chat-room-input" value={draft} maxLength={900} placeholder="Tulis pertanyaan tentang hasil ini" onChange={(event) => setDraft(event.target.value)} disabled={isSending} />

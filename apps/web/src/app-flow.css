@@ -1693,6 +1693,27 @@
   font-size: 12px;
 }
 
+.app-chat-thread__error p {
+  margin: 0;
+}
+
+.app-chat-thread__error button {
+  margin-top: 8px;
+  padding: 0;
+  border: 0;
+  border-bottom: 1px solid currentColor;
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+  font: inherit;
+  font-weight: 600;
+}
+
+.app-chat-thread__error button:focus-visible {
+  outline: 2px solid var(--optic-blue);
+  outline-offset: 3px;
+}
+
 .app-chat-compose {
   margin-top: 18px;
   padding: 12px;
@@ -2084,6 +2105,8 @@
   overflow: auto;
 }
 
+.app-history-chat__overview-toggle { display: none; }
+.app-history-chat__mobile-overview { display: block; }
 .app-history-chat__result { margin-top: 44px; display: grid; gap: 18px; }
 .app-history-chat__result img,
 .app-history-chat__result > span,
@@ -2102,9 +2125,30 @@
   overflow: hidden;
 }
 
-.app-history-chat__thread > header { max-width: 700px; }
+.app-history-chat__thread-overview { width: min(100%, 700px); }
+.app-history-chat__thread-toggle {
+  width: 100%;
+  min-height: 32px;
+  padding: 0;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto auto;
+  align-items: center;
+  gap: 12px;
+  border: 0;
+  background: transparent;
+  color: var(--optic-ink);
+  cursor: pointer;
+  font: inherit;
+  text-align: left;
+}
+.app-history-chat__thread-toggle > span:nth-child(2) { color: #62636a; font-size: 12px; font-weight: 600; text-align: right; }
+.app-history-chat__thread-toggle > span:last-child { color: var(--optic-blue); font-size: 17px; line-height: 1; }
+.app-history-chat__thread-toggle:focus-visible,
+.app-history-chat__overview-toggle:focus-visible { outline: 2px solid var(--optic-blue); outline-offset: 4px; }
+.app-history-chat__thread-overview.is-collapsed { padding-bottom: 2px; }
+.app-history-chat__thread-overview.is-collapsed .app-history-chat__thread-overview-copy { display: none; }
 .app-history-chat__thread h2 { margin: 14px 0 0; color: var(--optic-ink); font-size: clamp(31px, 3.5vw, 48px); font-weight: 500; line-height: 1.02; letter-spacing: -.055em; }
-.app-history-chat__thread > header > p:last-child { max-width: 610px; margin: 14px 0 0; color: #62636a; font-size: 14px; line-height: 1.6; }
+.app-history-chat__thread-overview-copy > p { max-width: 610px; margin: 14px 0 0; color: #62636a; font-size: 14px; line-height: 1.6; }
 .app-history-chat__loading,
 .app-history-chat__empty { margin: auto; color: #62636a; }
 .app-history-chat__empty h2 { font-size: 32px; }
@@ -2123,7 +2167,7 @@
 .app-history-chat__starter button:hover,
 .app-history-chat__starter button:focus-visible { background: #e9edfc; }
 
-.app-history-chat__messages { min-height: 0; flex: 1; margin-top: 30px; padding-right: 8px; display: grid; align-content: start; gap: 14px; overflow-y: auto; }
+.app-history-chat__messages { min-height: 0; flex: 1; margin-top: 30px; padding-right: 8px; display: grid; align-content: safe end; gap: 14px; overflow-y: auto; }
 .app-history-chat__messages .app-chat-bubble--user { max-width: min(74%, 570px); margin-left: auto; }
 .app-history-chat__messages .app-chat-bubble--assistant { max-width: min(82%, 620px); }
 .app-history-chat__compose { margin-top: 16px; padding-top: 14px; display: grid; grid-template-columns: minmax(0, 1fr) 48px; gap: 10px; border-top: 1px solid var(--optic-line); }
@@ -2142,6 +2186,27 @@
   .app-page--chat { overflow: visible; }
   .app-history-chat { min-height: calc(100dvh - 82px); height: auto; grid-template-columns: 1fr; }
   .app-history-chat__context { padding: 30px 34px; border-right: 0; border-bottom: 1px solid var(--optic-line); }
+  .app-history-chat__overview-toggle {
+    width: 100%;
+    margin-top: 24px;
+    padding: 12px 14px;
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    align-items: center;
+    gap: 12px;
+    border: 1px solid var(--optic-line);
+    background: #f7f7f5;
+    color: var(--optic-ink);
+    cursor: pointer;
+    font: inherit;
+    text-align: left;
+  }
+  .app-history-chat__overview-toggle > span:first-child { min-width: 0; display: grid; gap: 3px; }
+  .app-history-chat__overview-toggle small { color: var(--optic-blue); font-size: 10px; font-weight: 600; letter-spacing: .11em; text-transform: uppercase; }
+  .app-history-chat__overview-toggle strong { overflow: hidden; color: var(--optic-ink); font-size: 13px; font-weight: 600; text-overflow: ellipsis; white-space: nowrap; }
+  .app-history-chat__overview-toggle > span:last-child { color: var(--optic-blue); font-size: 18px; line-height: 1; }
+  .app-history-chat__context.is-collapsed { padding-bottom: 20px; }
+  .app-history-chat__context.is-collapsed .app-history-chat__mobile-overview { display: none; }
   .app-history-chat__mobile-heading { display: block; max-width: 650px; margin-top: 32px; }
   .app-history-chat__mobile-heading h2 { margin: 12px 0 0; color: var(--optic-ink); font-size: clamp(31px, 5vw, 44px); font-weight: 500; line-height: 1.03; letter-spacing: -.055em; }
   .app-history-chat__mobile-heading > p:last-child { max-width: 620px; margin: 14px 0 0; color: #62636a; font-size: 14px; line-height: 1.6; }
@@ -2153,7 +2218,9 @@
   .app-history-chat__note { display: none; }
   .app-history-chat__thread { min-height: calc(100dvh - 280px); padding: 32px 34px 16px; overflow: visible; }
   .app-history-chat__thread > header { display: none; }
-  .app-history-chat__messages { min-height: 280px; max-height: 54dvh; }
+  /* Once the result context is compact, tablet chat should use the reclaimed
+     height instead of retaining the old landing-page-sized message viewport. */
+  .app-history-chat__messages { min-height: 336px; max-height: 64dvh; }
   .app-history-chat__compose { position: sticky; bottom: 0; padding-bottom: calc(8px + env(safe-area-inset-bottom)); background: #f7f7f5; }
   .app-result:not(.app-result--loading) { padding-top: 48px; }
 }
@@ -2183,6 +2250,7 @@
   .app-page--chat { overflow: visible; }
   .app-history-chat { min-height: calc(100dvh - 82px); height: auto; grid-template-columns: 1fr; }
   .app-history-chat__context { padding: 24px 16px; border-right: 0; border-bottom: 1px solid var(--optic-line); }
+  .app-history-chat__overview-toggle { margin-top: 18px; padding: 11px 12px; }
   .app-history-chat__result { margin-top: 24px; grid-template-columns: 72px minmax(0, 1fr); align-items: center; }
   .app-history-chat__result img,
   .app-history-chat__result > span,
@@ -2192,7 +2260,7 @@
   .app-history-chat__note { display: none; }
   .app-history-chat__thread { min-height: calc(100dvh - 220px); padding: 30px 16px 12px; }
   .app-history-chat__thread h2 { font-size: 34px; }
-  .app-history-chat__messages { min-height: 260px; max-height: 52dvh; }
+  .app-history-chat__messages { min-height: 312px; max-height: 62dvh; }
   .app-history-chat__compose { position: sticky; bottom: 0; padding-bottom: calc(8px + env(safe-area-inset-bottom)); background: #f7f7f5; }
   .app-result:not(.app-result--loading) { padding-top: 36px; }
 }
@@ -2260,9 +2328,16 @@
   .app-dialog__actions { align-items: stretch; flex-direction: column; gap: 14px; }
   .app-dialog__actions .app-primary-action { width: 100%; }
 }
-/* NEI citations stay within the message flow: opening a source never scrolls the room. */
+/* NEI citations stay beside their claim: opening a source never scrolls the room. */
+.chat-source-popover {
+  position: relative;
+  display: inline-flex;
+  z-index: 1;
+}
+
 .chat-source-ref {
-  display: inline;
+  display: inline-flex;
+  align-items: baseline;
   padding: 0.1em 0.28em;
   margin-inline: 0.1em;
   border: 0;
@@ -2270,11 +2345,14 @@
   background: transparent;
   color: #405ed1;
   font: inherit;
-  font-size: 0.8em;
+  font-size: 0.75em;
   font-weight: 600;
+  letter-spacing: .02em;
   vertical-align: super;
   cursor: pointer;
 }
+
+.chat-source-ref sup { margin-left: 1px; font-size: .85em; }
 
 .chat-source-ref:hover,
 .chat-source-ref[aria-expanded="true"] {
@@ -2282,65 +2360,102 @@
 }
 
 .chat-source-ref:focus-visible,
-.chat-sources button:focus-visible,
-.chat-sources a:focus-visible {
+.chat-source-popover__card button:focus-visible,
+.chat-source-popover__card a:focus-visible {
   outline: 2px solid #405ed1;
   outline-offset: 3px;
 }
 
-.chat-sources {
-  margin-top: 1rem;
-  min-width: 0;
-}
-
-.chat-sources .chat-sources__label {
+.chat-sources__label {
   margin: 0.65rem 0 0;
   color: #606570;
   font-size: 0.78rem;
   line-height: 1.5;
 }
 
-.chat-sources__panel {
-  margin-top: 0.75rem;
-  padding: 1rem;
-  border: 1px solid #d5dbee;
-  border-radius: 0.75rem;
-  background: #f7f9ff;
+.chat-source-popover__card {
+  position: absolute;
+  z-index: 10;
+  left: 0;
+  bottom: calc(100% + 10px);
+  width: min(350px, calc(100vw - 32px));
+  padding: 14px;
+  border: 1px solid #cfd8fa;
+  border-radius: 12px;
+  background: #f8f9ff;
+  box-shadow: 0 12px 34px rgba(40, 49, 84, .16);
+  color: #45464b;
   overflow-wrap: anywhere;
-  font-size: 0.9rem;
+  font-size: 13px;
+  line-height: 1.55;
 }
 
-.chat-sources__head {
+.chat-source-popover__head {
   display: flex;
   align-items: start;
   justify-content: space-between;
   gap: 0.75rem;
 }
 
-.chat-sources__head button {
-  flex: 0 0 2.75rem;
-  min-height: 2.75rem;
+.chat-source-popover__head button {
+  flex: 0 0 28px;
+  min-height: 28px;
   border: 0;
   border-radius: 50%;
   background: transparent;
   color: #405ed1;
   font: inherit;
-  font-size: 1.5rem;
+  font-size: 1.25rem;
   cursor: pointer;
 }
 
-.chat-sources__panel blockquote {
-  margin: 0.75rem 0;
+.chat-source-popover__sections {
+  margin: 8px 0 0;
+  color: #626a7d;
+  font-size: 12px;
+}
+
+.chat-source-popover__card blockquote {
+  margin: 10px 0;
   padding-inline-start: 0.8rem;
   border-inline-start: 2px solid #b8c6f6;
   max-height: 15rem;
   overflow-y: auto;
-  white-space: pre-wrap;
+  white-space: pre-line;
   line-height: 1.6;
 }
 
-.chat-sources__panel a {
+.chat-source-popover__card a {
   color: #405ed1;
   text-decoration: underline;
   text-underline-offset: 0.2em;
+}
+
+@media (max-width: 920px) {
+  .chat-source-popover__card {
+    /* A card anchored inside the scrollable message pane can be clipped behind
+       the context header on tablet. At this breakpoint it is a viewport sheet. */
+    position: fixed;
+    z-index: 60;
+    right: auto;
+    bottom: calc(76px + env(safe-area-inset-bottom));
+    left: 50%;
+    width: min(500px, calc(100vw - 48px));
+    max-height: min(64dvh, 560px);
+    transform: translateX(-50%);
+    overflow-y: auto;
+  }
+
+  .chat-source-popover__card blockquote { max-height: 13em; }
+}
+
+@media (max-width: 620px) {
+  .chat-source-popover__card {
+    right: 16px;
+    bottom: calc(72px + env(safe-area-inset-bottom));
+    left: 16px;
+    width: auto;
+    max-height: min(62dvh, 500px);
+    transform: none;
+  }
 }

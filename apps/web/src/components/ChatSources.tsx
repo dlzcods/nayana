@@ -1,4 +1,4 @@
-import { useId, useState, type ReactNode } from 'react'
+import { useId, useMemo, useState, type ReactNode } from 'react'
 import type { ChatCitation } from '../lib/screening-api'
 
 const approvedPaths = new Set([
@@ -18,45 +18,106 @@ function safeSourceUrl(value: string): string | null {
   } catch { return null }
 }
 
-export function ChatSources({ text, citations = [], renderText }: {
+// Citations are source text, not user-authored Markdown. Rendering it as plain
+// text keeps old stored messages and newly generated answers visually stable.
+function cleanSourceText(value: string): string {
+  return value
+    .replace(/!\[[^\]]*\]\([^)]*\)/g, '')
+    .replace(/\[([^\]]+)\]\([^)]*\)/g, '$1')
+    .replace(/(\*\*|__)(.*?)\1/g, '$2')
+    .replace(/(?<!\*)\*([^*]+)\*(?!\*)/g, '$1')
+    .replace(/`([^`]+)`/g, '$1')
+    .replace(/\\([.#*_()])/g, '$1')
+    .replace(/\\\[/g, '[')
+    .replace(/\\\]/g, ']')
+    .replace(/[ \t]+\n/g, '\n')
+    .replace(/\n{3,}/g, '\n\n')
+    .trim()
+}
+
+type ArticleCitation = ChatCitation & { articleId: number; sections: string[]; originalIds: Set<number> }
+
+function articleCitations(citations: ChatCitation[]): ArticleCitation[] {
+  const byUrl = new Map<string, ArticleCitation>()
+  for (const source of citations) {
+    const safeUrl = safeSourceUrl(source.url)
+    if (!safeUrl) continue
+    const current = byUrl.get(safeUrl)
+    const sections = (source.sections?.length ? source.sections : [source.heading]).map(cleanSourceText).filter(Boolean)
+    if (current) {
+      current.originalIds.add(source.id)
+      for (const section of sections) if (!current.sections.includes(section)) current.sections.push(section)
+      continue
+    }
+    byUrl.set(safeUrl, {
+      ...source,
+      articleId: byUrl.size + 1,
+      url: safeUrl,
+      heading: cleanSourceText(source.heading),
+      excerpt: cleanSourceText(source.excerpt),
+      sections: sections.length ? sections : [cleanSourceText(source.heading)],
+      originalIds: new Set([source.id]),
+    })
+  }
+  return [...byUrl.values()]
+}
+
+export function ChatSources({ text, citations = [], renderText, onCitationOpen }: {
   text: string
   citations?: ChatCitation[]
   renderText: (text: string, renderCitation: (text: string) => ReactNode) => ReactNode
+  onCitationOpen?: () => void
 }) {
   const [opened, setOpened] = useState<number | null>(null)
-  const panelId = useId()
-  const valid = (Array.isArray(citations) ? citations : []).filter((source) => source
-    && Number.isInteger(source.id) && source.id > 0
-    && typeof source.title === 'string' && typeof source.heading === 'string'
-    && typeof source.excerpt === 'string' && typeof source.url === 'string' && safeSourceUrl(source.url))
-  const selected = valid.find((source) => source.id === opened)
+  const popoverId = useId()
+  const articles = useMemo(() => articleCitations(Array.isArray(citations) ? citations.filter((source): source is ChatCitation => Boolean(source)
+    && Number.isInteger(source.id) && source.id > 0 && typeof source.title === 'string'
+    && typeof source.heading === 'string' && typeof source.excerpt === 'string' && typeof source.url === 'string') : []), [citations])
+  const shownArticles = new Set<number>()
+
+  function openCitation(articleId: number) {
+    setOpened(articleId)
+    onCitationOpen?.()
+  }
+
   function renderCitation(part: string): ReactNode {
     return part.split(/(\[\d+\])/g).map((piece, index) => {
       const match = /^\[(\d+)\]$/.exec(piece)
-      const source = match ? valid.find((row) => row.id === Number(match[1])) : null
-      if (!source) return piece
-      return <button type="button" className="chat-source-ref" key={index}
-        aria-label={`Sumber ${source.id}: ${source.title}`}
-        aria-expanded={opened === source.id} aria-controls={panelId}
-        onClick={() => setOpened((current) => current === source.id ? null : source.id)}>[{source.id}]</button>
+      const article = match ? articles.find((row) => row.originalIds.has(Number(match[1]))) : null
+      if (!article) return piece
+      // Multiple chunks from one article formerly rendered as [1][2]. Present
+      // one compact article reference at its first relevant claim instead.
+      if (shownArticles.has(article.articleId)) return null
+      shownArticles.add(article.articleId)
+      const isOpen = opened === article.articleId
+      return <span className="chat-source-popover" key={index} onMouseLeave={() => setOpened(null)}>
+        <button type="button" className="chat-source-ref"
+          aria-label={`Lihat sumber NEI: ${article.title}`}
+          aria-expanded={isOpen} aria-controls={popoverId}
+          onMouseEnter={() => openCitation(article.articleId)}
+          onFocus={() => openCitation(article.articleId)}
+          onKeyDown={(event) => { if (event.key === 'Escape') setOpened(null) }}
+          onClick={() => setOpened((current) => {
+            const next = current === article.articleId ? null : article.articleId
+            if (next !== null) onCitationOpen?.()
+            return next
+          })}>
+          NEI<sup>{article.articleId}</sup>
+        </button>
+        {isOpen && <section id={popoverId} className="chat-source-popover__card" role="dialog" aria-label={`Sumber ${article.title}`}
+          onMouseEnter={() => setOpened(article.articleId)}>
+          <div className="chat-source-popover__head"><strong>{article.title}</strong>
+            <button type="button" onClick={() => setOpened(null)} aria-label="Tutup sumber">×</button></div>
+          <p className="chat-source-popover__sections">Bagian relevan: {article.sections.join(' · ')}</p>
+          <blockquote lang="en">{article.excerpt}</blockquote>
+          <a href={article.url} target="_blank" rel="noopener noreferrer">Baca artikel NEI ↗</a>
+        </section>}
+      </span>
     })
   }
+
   return <>
     {renderText(text, renderCitation)}
-    {valid.length > 0 && <div className="chat-sources">
-      <p className="chat-sources__label">Rujukan: National Eye Institute · {new Set(valid.map((source) => source.url)).size} artikel</p>
-      <div id={panelId}>
-        {selected && <section className="chat-sources__panel" aria-label="Detail sumber">
-          <div className="chat-sources__head"><strong>{selected.title}</strong>
-            <button type="button" onClick={() => setOpened(null)} aria-label="Tutup detail sumber">×</button></div>
-          <p>{selected.heading}</p>
-          <p className="chat-sources__label">Potongan sumber asli (bahasa Inggris)</p>
-          <blockquote lang="en">{selected.excerpt}</blockquote>
-          <a href={safeSourceUrl(selected.url)!} target="_blank" rel="noopener noreferrer">Baca artikel NEI ↗</a>
-          {selected.source_updated_at && <p className="chat-sources__label">Pembaruan artikel: {selected.source_updated_at}</p>}
-          <p className="chat-sources__label">Courtesy: NEI/NIH. Jawaban AI bukan penilaian atau dukungan resmi NEI.</p>
-        </section>}
-      </div>
-    </div>}
+    {articles.length > 0 && <p className="chat-sources__label">Rujukan: National Eye Institute · {articles.length} artikel</p>}
   </>
 }

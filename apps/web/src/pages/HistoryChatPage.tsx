@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { Link, useParams } from '@tanstack/react-router'
 import { BackArrowIcon } from '../components/BackArrowIcon'
 import { SiteHeader } from '../components/SiteHeader'
@@ -22,8 +22,11 @@ export function HistoryChatPage() {
   const [isLoading, setIsLoading] = useState(true)
   const [isSending, setIsSending] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [failedQuestion, setFailedQuestion] = useState<string | null>(null)
+  const [overviewPreference, setOverviewPreference] = useState<'auto' | 'expanded' | 'collapsed'>('auto')
   const messagesRef = useRef<HTMLDivElement | null>(null)
   const shouldFollowMessages = useRef(false)
+  const initialMessagesPositioned = useRef(false)
   const initialQuestionSent = useRef(false)
   const roomEpoch = useRef(0)
   const sending = useRef(false)
@@ -41,8 +44,11 @@ export function HistoryChatPage() {
     let objectUrl: string | null = null
     setIsLoading(true)
     setError(null)
+    setFailedQuestion(null)
+    setOverviewPreference('auto')
     setMessages([])
     initialQuestionSent.current = false
+    initialMessagesPositioned.current = false
     void (async () => {
       const nextRecord = await getAccountHistoryRecord(recordId)
       if (!nextRecord) throw new Error('Hasil ini tidak lagi tersedia di riwayat Anda.')
@@ -73,22 +79,37 @@ export function HistoryChatPage() {
     messagesRef.current.scrollTo({ top: messagesRef.current.scrollHeight, behavior: 'smooth' })
   }, [messages, isSending])
 
-  async function sendQuestion(question: string, cachedAnswer?: SuggestedQuestion) {
+  // Position saved conversations at their newest message only on room open.
+  // Subsequent manual scrolling is never overridden by this effect.
+  useLayoutEffect(() => {
+    if (initialMessagesPositioned.current || !messages.length || !messagesRef.current) return
+    messagesRef.current.scrollTop = messagesRef.current.scrollHeight
+    initialMessagesPositioned.current = true
+  }, [messages])
+
+  async function sendQuestion(question: string, cachedAnswer?: SuggestedQuestion, retry = false) {
     const cleanQuestion = question.trim()
     if (!cleanQuestion || !record || !conversation || sending.current) return
     sending.current = true
     const epoch = roomEpoch.current
     const userMessage: ScreeningChatMessage = { role: 'user', content: cleanQuestion }
-    const nextMessages = [...messages, userMessage]
-    setMessages(nextMessages)
+    const latestMessage = messages.at(-1)
+    const isRetryingStoredQuestion = retry
+      && latestMessage?.role === 'user'
+      && latestMessage.content.trim() === cleanQuestion
+    const nextMessages = isRetryingStoredQuestion ? messages : [...messages, userMessage]
+    if (!isRetryingStoredQuestion) setMessages(nextMessages)
     setDraft('')
     setError(null)
+    setFailedQuestion(null)
     setIsSending(true)
     shouldFollowMessages.current = true
-    let didPersistUserMessage = false
+    let didPersistUserMessage = isRetryingStoredQuestion
     try {
-      await saveConversationMessage(conversation.id, userMessage)
-      didPersistUserMessage = true
+      if (!isRetryingStoredQuestion) {
+        await saveConversationMessage(conversation.id, userMessage)
+        didPersistUserMessage = true
+      }
       if (epoch !== roomEpoch.current) return
       const response = cachedAnswer || await askScreeningQuestion({
           screening: screeningFromHistory(record),
@@ -99,6 +120,7 @@ export function HistoryChatPage() {
       await saveConversationMessage(conversation.id, assistantMessage)
       if (epoch !== roomEpoch.current) return
       setMessages((current) => [...current, assistantMessage])
+      setFailedQuestion(null)
     } catch (reason) {
       if (epoch !== roomEpoch.current) return
       if (!didPersistUserMessage) {
@@ -107,6 +129,7 @@ export function HistoryChatPage() {
       }
       const message = reason instanceof Error ? reason.message : 'Jawaban belum dapat dibuat.'
       setError(didPersistUserMessage ? `${message} Pertanyaan Anda tetap tersimpan.` : message)
+      setFailedQuestion(didPersistUserMessage ? cleanQuestion : null)
     } finally {
       if (epoch === roomEpoch.current) { sending.current = false; setIsSending(false) }
     }
@@ -133,31 +156,48 @@ export function HistoryChatPage() {
     ? demoCaseImageUrl(demoCaseIdFromScreeningId(record.origin_screening_id || '') || '')
     : ''
   const resultImageUrl = photoUrl || demoImageUrl
+  const overviewExpanded = overviewPreference === 'expanded'
+    || (overviewPreference === 'auto' && messages.length === 0 && !isSending)
+  const overviewToggleLabel = overviewExpanded ? 'Sembunyikan ringkasan' : 'Tampilkan ringkasan'
+  const compactResultLabel = record
+    ? `${record.top_prediction_label} · ${percentage(record.predictions.find((item) => item.key === record.top_prediction_key)?.score || 0)} kemiripan pola`
+    : 'Ringkasan hasil'
+
+  function toggleOverview() {
+    setOverviewPreference(overviewExpanded ? 'collapsed' : 'expanded')
+  }
 
   return (
     <div className="app-page app-page--chat">
       <SiteHeader />
       <main className="app-history-chat" aria-busy={isLoading}>
-        <aside className="app-history-chat__context">
+        <aside className={`app-history-chat__context ${overviewExpanded ? 'is-expanded' : 'is-collapsed'}`}>
           <Link className="app-chat-room__back" to="/history" search={{ hasil: undefined }}><BackArrowIcon /> Kembali ke riwayat</Link>
           {record && (
             <>
-              <div className="app-history-chat__mobile-heading">
-                <p className="app-kicker">Ruang percakapan</p>
-                <h2>Tanyakan hasil ini dengan tenang.</h2>
-                <p>Jawaban bersifat edukatif untuk membantu Anda memahami hasil skrining awal dan menyiapkan diskusi lanjutan.</p>
-              </div>
-              <div className="app-history-chat__result">
-                {resultImageUrl ? <img src={resultImageUrl} alt={photoUrl ? 'Foto fundus dari hasil skrining terpilih' : 'Foto fundus contoh yang dipilih'} /> : (
-                  <div className="app-history-chat__photo-unavailable">Foto tidak tersedia</div>
-                )}
-                <div>
-                  <p className="app-kicker">Hasil skrining awal</p>
-                  <h1>{record.top_prediction_label}</h1>
-                  <strong>{percentage(record.predictions.find((item) => item.key === record.top_prediction_key)?.score || 0)} kemiripan pola</strong>
+              <button type="button" className="app-history-chat__overview-toggle" aria-expanded={overviewExpanded}
+                onClick={toggleOverview}>
+                <span><small>Ruang percakapan</small><strong>{compactResultLabel}</strong></span>
+                <span aria-hidden="true">{overviewExpanded ? '⌃' : '⌄'}</span>
+              </button>
+              <div className="app-history-chat__mobile-overview">
+                <div className="app-history-chat__mobile-heading">
+                  <p className="app-kicker">Ruang percakapan</p>
+                  <h2>Tanyakan hasil ini dengan tenang.</h2>
+                  <p>Jawaban bersifat edukatif untuk membantu Anda memahami hasil skrining awal dan menyiapkan diskusi lanjutan.</p>
                 </div>
+                <div className="app-history-chat__result">
+                  {resultImageUrl ? <img src={resultImageUrl} alt={photoUrl ? 'Foto fundus dari hasil skrining terpilih' : 'Foto fundus contoh yang dipilih'} /> : (
+                    <div className="app-history-chat__photo-unavailable">Foto tidak tersedia</div>
+                  )}
+                  <div>
+                    <p className="app-kicker">Hasil skrining awal</p>
+                    <h1>{record.top_prediction_label}</h1>
+                    <strong>{percentage(record.predictions.find((item) => item.key === record.top_prediction_key)?.score || 0)} kemiripan pola</strong>
+                  </div>
+                </div>
+                <p className="app-history-chat__note">Percakapan ini tersimpan bersama hasil tersebut. Gunakan sebagai bahan diskusi dengan dokter spesialis mata (Sp.M).</p>
               </div>
-              <p className="app-history-chat__note">Percakapan ini tersimpan bersama hasil tersebut. Gunakan sebagai bahan diskusi dengan dokter spesialis mata (Sp.M).</p>
             </>
           )}
         </aside>
@@ -174,10 +214,16 @@ export function HistoryChatPage() {
           )}
           {record && (
             <>
-              <header>
-                <p className="app-kicker">Ruang percakapan</p>
-                <h2 id="history-chat-title">Tanyakan hasil ini dengan tenang.</h2>
-                <p>Jawaban bersifat edukatif untuk membantu Anda memahami hasil skrining awal dan menyiapkan diskusi lanjutan.</p>
+              <header className={`app-history-chat__thread-overview ${overviewExpanded ? 'is-expanded' : 'is-collapsed'}`}>
+                <button type="button" className="app-history-chat__thread-toggle" aria-expanded={overviewExpanded} onClick={toggleOverview}>
+                  <span className="app-kicker">Ruang percakapan</span>
+                  <span>{overviewExpanded ? overviewToggleLabel : compactResultLabel}</span>
+                  <span aria-hidden="true">{overviewExpanded ? '⌃' : '⌄'}</span>
+                </button>
+                <div className="app-history-chat__thread-overview-copy">
+                  <h2 id="history-chat-title">Tanyakan hasil ini dengan tenang.</h2>
+                  <p>Jawaban bersifat edukatif untuk membantu Anda memahami hasil skrining awal dan menyiapkan diskusi lanjutan.</p>
+                </div>
               </header>
               {messages.length === 0 && !isSending && (
                 <SuggestedQuestionStarter
@@ -196,11 +242,11 @@ export function HistoryChatPage() {
                 }}
               >
                 {messages.map((message, index) => (
-                  <div className={`app-chat-bubble app-chat-bubble--${message.role}`} key={`${message.role}-${index}`}><ChatMessageContent text={message.content} citations={message.citations} /></div>
+                  <div className={`app-chat-bubble app-chat-bubble--${message.role}`} key={`${message.role}-${index}`}><ChatMessageContent text={message.content} citations={message.citations} onCitationOpen={() => setOverviewPreference('collapsed')} /></div>
                 ))}
                 {isSending && <div className="app-chat-bubble app-chat-bubble--loading" aria-label="Menyiapkan penjelasan"><span /><span /><span /><p>Menyusun penjelasan…</p></div>}
               </div>
-              {error && <p className="app-chat-thread__error" role="alert">{error}</p>}
+              {error && <div className="app-chat-thread__error" role="alert"><p>{error}</p>{failedQuestion && <button type="button" onClick={() => { void sendQuestion(failedQuestion, undefined, true) }}>Coba lagi</button>}</div>}
               <form className="app-history-chat__compose" onSubmit={(event) => { event.preventDefault(); void sendQuestion(draft) }}>
                 <label className="sr-only" htmlFor="history-chat-input">Tulis pertanyaan tentang hasil ini</label>
                 <input id="history-chat-input" value={draft} maxLength={900} disabled={isSending} placeholder="Tulis pertanyaan tentang hasil ini" onChange={(event) => setDraft(event.target.value)} />

@@ -77,6 +77,7 @@ export type ChatCitation = {
   chunk_id: string
   title: string
   heading: string
+  sections?: string[]
   url: string
   excerpt: string
   corpus_version: string
