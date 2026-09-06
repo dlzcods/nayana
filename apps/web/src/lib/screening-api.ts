@@ -72,12 +72,31 @@ export type ExecutiveSummary = {
   disclaimer: string
 }
 
-export type ScreeningChatMessage = {
+export type ChatCitation = {
+  id: number
+  chunk_id: string
+  title: string
+  heading: string
+  url: string
+  excerpt: string
+  corpus_version: string
+  source_updated_at?: string | null
+  fetched_at: string
+  attribution?: string
+}
+
+export type GroundingMetadata = {
+  citations?: ChatCitation[]
+  source_status?: 'grounded' | 'insufficient_evidence' | 'application_context' | null
+  corpus_version?: string | null
+}
+
+export type ScreeningChatMessage = GroundingMetadata & {
   role: 'user' | 'assistant'
   content: string
 }
 
-export type SuggestedQuestion = {
+export type SuggestedQuestion = GroundingMetadata & {
   id: string
   question: string
   answer: string
@@ -88,7 +107,8 @@ const apiBase = (configuredApiBase || 'http://localhost:8000').replace(/\/$/, ''
 const configuredReportApiBase = import.meta.env.VITE_NAYANA_REPORT_API_BASE_URL?.trim()
 const reportApiBase = configuredReportApiBase?.replace(/\/$/, '') || ''
 const executiveSummaryRequests = new Map<string, Promise<ExecutiveSummary>>()
-const suggestedQuestionRequests = new Map<string, Promise<SuggestedQuestion[]>>()
+const suggestedQuestionRequests = new Map<string, { request: Promise<SuggestedQuestion[]>; expiresAt: number }>()
+const SUGGESTION_BROWSER_CACHE_MS = 5 * 60 * 1000
 
 function apiUrl(path: string) {
   return `${apiBase}${path}`
@@ -190,10 +210,10 @@ export function askScreeningQuestion(options: {
   summary: ExecutiveSummary | null
   messages: ScreeningChatMessage[]
 }) {
-  return request<{ answer: string }>('/v1/screenings/chat', {
+  return request<{ answer: string } & GroundingMetadata>('/v1/screenings/chat', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(options),
+    body: JSON.stringify({ ...options, messages: options.messages.slice(-10).map(({ role, content }) => ({ role, content })) }),
   })
 }
 
@@ -202,8 +222,9 @@ export function getSuggestedQuestions(options: {
   summary: ExecutiveSummary | null
 }) {
   const key = `${options.screening.model_version}:${options.screening.predictions.map((item) => `${item.key}:${item.score.toFixed(3)}`).join('|')}`
-  const existingRequest = suggestedQuestionRequests.get(key)
-  if (existingRequest) return existingRequest
+  const existing = suggestedQuestionRequests.get(key)
+  if (existing && existing.expiresAt > Date.now()) return existing.request
+  if (existing) suggestedQuestionRequests.delete(key)
 
   const requestPromise = request<{ questions: SuggestedQuestion[] }>('/v1/screenings/suggested-questions', {
     method: 'POST',
@@ -213,7 +234,7 @@ export function getSuggestedQuestions(options: {
     .then((response) => response.questions)
     .catch(() => { throw new Error('Pertanyaan lanjutan belum tersedia. Anda tetap dapat menulis pertanyaan sendiri.') })
 
-  suggestedQuestionRequests.set(key, requestPromise)
+  suggestedQuestionRequests.set(key, { request: requestPromise, expiresAt: Date.now() + SUGGESTION_BROWSER_CACHE_MS })
   void requestPromise.catch(() => { suggestedQuestionRequests.delete(key) })
   return requestPromise
 }

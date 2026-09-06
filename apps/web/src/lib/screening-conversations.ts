@@ -82,7 +82,7 @@ async function getOrCreateConversationOnce(recordId: string) {
 export async function getConversationMessages(conversationId: string) {
   requireSupabaseUrl()
   const response = await authenticatedSupabaseFetch(
-    `/rest/v1/screening_chat_messages?select=id,conversation_id,role,content,created_at&conversation_id=eq.${encodeURIComponent(conversationId)}&order=created_at.asc&limit=100`,
+    `/rest/v1/screening_chat_messages?select=*&conversation_id=eq.${encodeURIComponent(conversationId)}&order=created_at.asc&limit=100`,
   )
   if (!response.ok) throw await responseError(response, 'Pesan percakapan belum dapat dimuat.')
   return response.json() as Promise<StoredChatMessage[]>
@@ -100,7 +100,12 @@ export async function saveConversationMessage(conversationId: string, message: S
   const response = await authenticatedSupabaseFetch('/rest/v1/screening_chat_messages', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', Prefer: 'return=representation' },
-    body: JSON.stringify({ conversation_id: conversationId, role: message.role, content: cleanContent }),
+    body: JSON.stringify({ conversation_id: conversationId, role: message.role, content: cleanContent,
+      ...(message.citations?.length || message.source_status ? {
+        citations: message.citations || [], source_status: message.source_status || null,
+        corpus_version: message.corpus_version || null,
+      } : {}),
+    }),
   })
   if (!response.ok) throw await responseError(response, 'Pesan belum dapat disimpan.')
 
