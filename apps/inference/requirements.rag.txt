@@ -1,0 +1,6 @@
+# Kept separate from the PDF service. Build and serving use the same versions.
+sentence-transformers==5.1.0
+faiss-cpu==1.12.0
+torch==2.8.0
+transformers==4.55.4
+huggingface-hub==0.36.0

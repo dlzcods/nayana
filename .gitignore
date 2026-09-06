@@ -42,3 +42,6 @@ docs/internal/
 # The trained model is restored from the Hugging Face Space.
 # Keep it locally for inference, but do not place the 80 MB artifact in Git.
 apps/inference/model/
+
+# Versioned NEI snapshots/indexes are published as Modal artifacts, not source.
+apps/inference/artifacts/
