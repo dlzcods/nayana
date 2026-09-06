@@ -738,7 +738,11 @@ def generate_screening_chat(payload: ScreeningChatRequest) -> ScreeningChatRespo
             # Do not rewrite text after source attribution; it could change the claim.
             return ScreeningChatResponse(**result.model_dump())
         except Exception as error:
-            logger.warning("NEI chat unavailable (%s)", type(error).__name__)
+            # Keep the public response deliberately non-sensitive, but retain the
+            # complete traceback in Modal logs.  Previously this logged only the
+            # class name, which made an upstream timeout, malformed model JSON,
+            # and a retrieval failure indistinguishable during incident review.
+            logger.exception("NEI chat unavailable (error_type=%s)", type(error).__name__)
             raise HTTPException(status_code=503, detail="Jawaban bersumber belum dapat disiapkan. Silakan coba lagi; pertanyaan Anda tidak perlu dihapus.") from None
     api_key = os.getenv("GEMINI_API_KEY")
     if not api_key:
