@@ -23,6 +23,7 @@ from functools import lru_cache
 from io import BytesIO
 from pathlib import Path
 from typing import Literal
+import threading
 
 import numpy as np
 import tensorflow as tf
@@ -32,6 +33,7 @@ from fastapi.responses import FileResponse, StreamingResponse
 from pydantic import BaseModel, Field, model_validator
 from PIL import Image
 from starlette.concurrency import run_in_threadpool
+from rag.citations import Citation, PROMPT_VERSION
 
 
 BASE_DIR = Path(__file__).resolve().parent
@@ -157,12 +159,18 @@ class ScreeningChatRequest(BaseModel):
 
 class ScreeningChatResponse(BaseModel):
     answer: str
+    citations: list[Citation] = Field(default_factory=list, max_length=24)
+    source_status: Literal["grounded", "insufficient_evidence", "application_context"] | None = None
+    corpus_version: str | None = None
 
 
 class SuggestedQuestion(BaseModel):
     id: str = Field(pattern=r"^[a-z0-9-]{3,64}$")
     question: str = Field(min_length=12, max_length=180)
-    answer: str = Field(min_length=40, max_length=900)
+    answer: str = Field(min_length=40, max_length=4000)
+    citations: list[Citation] = Field(default_factory=list, max_length=24)
+    source_status: Literal["grounded", "insufficient_evidence", "application_context"] | None = None
+    corpus_version: str | None = None
 
 
 class SuggestedQuestionRequest(BaseModel):
@@ -431,6 +439,33 @@ Setiap item wajib memiliki `id` berupa slug unik huruf kecil dan strip, `questio
 SUGGESTION_CACHE_TTL_SECONDS = 60 * 60
 SUGGESTION_CACHE_MAX_ITEMS = 48
 _suggestion_cache: dict[str, tuple[float, SuggestedQuestionResponse]] = {}
+_rag_suggestion_guard = threading.Lock()
+_rag_suggestion_inflight: dict[str, threading.Event] = {}
+
+
+def rag_enabled() -> bool:
+    return bool(os.getenv("NAYANA_RAG_VERSION", "").strip())
+
+
+def rag_completion(instruction: str, payload: str) -> str:
+    from google import genai
+    from google.genai import types
+    key = os.getenv("GEMINI_API_KEY")
+    if not key:
+        raise HTTPException(status_code=503, detail="Percakapan hasil belum diaktifkan.")
+    client = genai.Client(api_key=key)
+    try:
+        response = client.models.generate_content(
+            model=os.getenv("GEMINI_MODEL", DEFAULT_GEMINI_MODEL), contents=payload,
+            config=types.GenerateContentConfig(
+                temperature=0.3, response_mime_type="application/json",
+                thinking_config=types.ThinkingConfig(thinking_level="HIGH", include_thoughts=False),
+                system_instruction=instruction,
+            ),
+        )
+        return response_text_without_thoughts(response)
+    finally:
+        client.close()
 
 
 def response_text_without_thoughts(response: object) -> str:
@@ -572,7 +607,9 @@ def suggestion_cache_key(screening: ScreeningResult) -> str:
 
     return json.dumps(
         {
-            "version": "suggestions-v1",
+            "version": PROMPT_VERSION if rag_enabled() else "suggestions-v1",
+            "corpus_version": os.getenv("NAYANA_RAG_VERSION", ""),
+            "llm": os.getenv("GEMINI_MODEL", DEFAULT_GEMINI_MODEL),
             "model_version": screening.model_version,
             "top": screening.top_prediction.key,
             "scores": [(item.key, round(item.score, 3)) for item in screening.predictions],
@@ -605,6 +642,42 @@ def parse_suggested_questions(response_text: str) -> SuggestedQuestionResponse:
 
 
 def generate_suggested_questions(payload: SuggestedQuestionRequest) -> SuggestedQuestionResponse:
+    if rag_enabled():
+        from rag.service import suggestion_pack
+        key = suggestion_cache_key(payload.screening)
+        # Coalesce only identical packs; unrelated screening categories must not
+        # wait behind one slow generation request.
+        with _rag_suggestion_guard:
+            cached = _suggestion_cache.get(key)
+            if cached and time.monotonic() - cached[0] < SUGGESTION_CACHE_TTL_SECONDS:
+                return cached[1]
+            event = _rag_suggestion_inflight.get(key)
+            owner = event is None
+            if owner:
+                event = threading.Event()
+                _rag_suggestion_inflight[key] = event
+        if not owner:
+            event.wait(timeout=115)
+            cached = _suggestion_cache.get(key)
+            if cached and time.monotonic() - cached[0] < SUGGESTION_CACHE_TTL_SECONDS:
+                return cached[1]
+            raise HTTPException(status_code=503, detail="Pertanyaan bersumber belum tersedia. Anda tetap dapat menulis pertanyaan sendiri.")
+        try:
+            try:
+                questions = suggestion_pack(payload.screening.top_prediction.key,
+                                            build_summary_context(payload.screening), rag_completion)
+                result = SuggestedQuestionResponse(questions=questions)
+                if len(_suggestion_cache) >= SUGGESTION_CACHE_MAX_ITEMS:
+                    _suggestion_cache.pop(next(iter(_suggestion_cache)))
+                _suggestion_cache[key] = (time.monotonic(), result)
+                return result
+            except Exception as error:
+                logger.warning("NEI suggestions unavailable (%s)", type(error).__name__)
+                raise HTTPException(status_code=503, detail="Pertanyaan bersumber belum tersedia. Anda tetap dapat menulis pertanyaan sendiri.") from None
+        finally:
+            with _rag_suggestion_guard:
+                _rag_suggestion_inflight.pop(key, None)
+                event.set()
     key = suggestion_cache_key(payload.screening)
     now = time.monotonic()
     cached = _suggestion_cache.get(key)
@@ -653,6 +726,20 @@ def generate_suggested_questions(payload: SuggestedQuestionRequest) -> Suggested
 
 
 def generate_screening_chat(payload: ScreeningChatRequest) -> ScreeningChatResponse:
+    if payload.messages[-1].role != "user":
+        raise HTTPException(status_code=422, detail="Pesan terakhir perlu berupa pertanyaan pengguna.")
+    if rag_enabled():
+        from rag.service import answer_question
+        try:
+            result = answer_question(payload.messages[-1].content,
+                                     [row.model_dump() for row in payload.messages[:-1]],
+                                     payload.screening.top_prediction.key,
+                                     build_summary_context(payload.screening), rag_completion)
+            # Do not rewrite text after source attribution; it could change the claim.
+            return ScreeningChatResponse(**result.model_dump())
+        except Exception as error:
+            logger.warning("NEI chat unavailable (%s)", type(error).__name__)
+            raise HTTPException(status_code=503, detail="Jawaban bersumber belum dapat disiapkan. Silakan coba lagi; pertanyaan Anda tidak perlu dihapus.") from None
     api_key = os.getenv("GEMINI_API_KEY")
     if not api_key:
         raise HTTPException(status_code=503, detail="Percakapan hasil belum diaktifkan.")
@@ -839,6 +926,13 @@ def build_demo_result(case_id: str, screening_id: str) -> ScreeningResult:
 
 @app.get("/v1/health")
 def health_check():
+    rag_version = os.getenv("NAYANA_RAG_VERSION", "").strip()
+    seeded_topics = []
+    if rag_version:
+        suggestion_dir = Path(os.getenv("NAYANA_RAG_ARTIFACTS", "/rag-data")) / "versions" / rag_version / "suggestions"
+        seeded_topics = [topic for topic in ("cataract", "diabetic_retinopathy", "glaucoma", "normal")
+                         if (suggestion_dir / f"{topic}.json").is_file()
+                         and (suggestion_dir / f"{topic}.sha256.json").is_file()]
     return {
         "status": "ready" if MODEL_PATH.is_dir() else "needs_model",
         "model_version": MODEL_VERSION,
@@ -846,6 +940,13 @@ def health_check():
         "executive_summary": {
             "configured": bool(os.getenv("GEMINI_API_KEY")),
             "model": os.getenv("GEMINI_MODEL", DEFAULT_GEMINI_MODEL),
+        },
+        "rag": {
+            "configured": rag_enabled(),
+            "version": rag_version or None,
+            "sources": 5 if rag_enabled() else 0,
+            "seeded_suggestion_topics": seeded_topics,
+            "ready": bool(rag_version) and len(seeded_topics) == 4,
         },
     }
 

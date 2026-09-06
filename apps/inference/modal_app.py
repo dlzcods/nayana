@@ -14,7 +14,12 @@ REMOTE_DIR = "/root/nayana"
 
 image = (
     modal.Image.debian_slim(python_version="3.11")
+    .pip_install("torch==2.8.0+cpu", index_url="https://download.pytorch.org/whl/cpu")
     .pip_install_from_requirements(LOCAL_DIR / "requirements.api.txt")
+    .pip_install_from_requirements(LOCAL_DIR / "requirements.rag.txt")
+    .env({"NAYANA_RAG_ARTIFACTS": "/rag-data", "NAYANA_RAG_REQUIRE_SEEDED_SUGGESTIONS": "1",
+          "TOKENIZERS_PARALLELISM": "false", "USE_TF": "0"})
+    .add_local_dir(LOCAL_DIR / "rag", f"{REMOTE_DIR}/rag")
     .add_local_file(LOCAL_DIR / "nayana_api.py", f"{REMOTE_DIR}/nayana_api.py")
     .add_local_file(
         LOCAL_DIR.parent / "web" / "public" / "brand" / "nayana-2.png",
@@ -27,9 +32,10 @@ image = (
 app = modal.App("nayana-inference")
 
 llm_secret = modal.Secret.from_name("nayana")
+rag_volume = modal.Volume.from_name("nayana-nei-rag", create_if_missing=False)
 
 
-@app.function(image=image, secrets=[llm_secret], timeout=120)
+@app.function(image=image, secrets=[llm_secret], volumes={"/rag-data": rag_volume}, timeout=120, memory=4096)
 @modal.concurrent(max_inputs=8)
 @modal.asgi_app()
 def api():

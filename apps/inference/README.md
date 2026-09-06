@@ -78,6 +78,15 @@ menggunakan temperature `0.3`, meminta JSON terstruktur, dan menonaktifkan outpu
 thought. Apabila secret, model, atau layanan tidak tersedia, endpoint ringkasan
 mengembalikan status tidak tersedia tanpa mengubah hasil skrining.
 
+## Chat dengan rujukan NEI
+
+Chat dapat memakai RAG dari lima artikel NEI yang diizinkan secara eksplisit.
+Pipeline scraping Firecrawl, chunking token-safe, embedding E5, FAISS, kontrak
+sitasi, evaluasi, dan urutan aktivasi produksi dijelaskan di
+`../../docs/provenance/nei-rag.md`. API tetap memakai alur chat lama sampai
+`NAYANA_RAG_VERSION` diisi dengan versi kandidat yang telah diuji. Jangan pernah
+menaruh `FIRECRAWL_API_KEY` pada secret frontend atau file yang masuk Git.
+
 ## Prototipe Gradio sumber
 
 Dari root monorepo, unduh model jika folder `model/` belum tersedia:
@@ -107,6 +116,7 @@ python app.py
 - `assets/examples/`: contoh foto yang tampil di Gradio.
 - `../../research/notebooks/`: notebook pelatihan dari Space sumber.
 - `../../docs/provenance/hugging-face-space.md`: README asli dari Space.
+- `../../docs/provenance/nei-rag.md`: sumber, pipeline, evaluasi, dan rollout RAG.
 - `../../third_party/eye-disease-classification/LICENSE.txt`: lisensi sumber.
 
 ## Batas penggunaan
