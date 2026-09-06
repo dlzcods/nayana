@@ -25,10 +25,19 @@ export function HistoryChatPage() {
   const messagesRef = useRef<HTMLDivElement | null>(null)
   const shouldFollowMessages = useRef(false)
   const initialQuestionSent = useRef(false)
+  const roomEpoch = useRef(0)
+  const sending = useRef(false)
   const requestedQuestion = new URLSearchParams(window.location.search).get('question')?.trim() || ''
 
   useEffect(() => {
     let active = true
+    roomEpoch.current += 1
+    sending.current = false
+    setIsSending(false)
+    setRecord(null)
+    setConversation(null)
+    setPhotoUrl(null)
+    setDraft('')
     let objectUrl: string | null = null
     setIsLoading(true)
     setError(null)
@@ -47,13 +56,14 @@ export function HistoryChatPage() {
       objectUrl = nextPhoto
       setRecord(nextRecord)
       setConversation(nextConversation)
-      setMessages(storedMessages.map(({ role, content }) => ({ role, content })))
+      setMessages(storedMessages.map(({ role, content, citations, source_status, corpus_version }) => ({ role, content, citations, source_status, corpus_version })))
       setPhotoUrl(nextPhoto)
     })().catch((reason) => {
       if (active) setError(reason instanceof Error ? reason.message : 'Ruang percakapan belum dapat dibuka.')
     }).finally(() => { if (active) setIsLoading(false) })
     return () => {
       active = false
+      roomEpoch.current += 1
       if (objectUrl) URL.revokeObjectURL(objectUrl)
     }
   }, [recordId])
@@ -63,9 +73,11 @@ export function HistoryChatPage() {
     messagesRef.current.scrollTo({ top: messagesRef.current.scrollHeight, behavior: 'smooth' })
   }, [messages, isSending])
 
-  async function sendQuestion(question: string, cachedAnswer?: string) {
+  async function sendQuestion(question: string, cachedAnswer?: SuggestedQuestion) {
     const cleanQuestion = question.trim()
-    if (!cleanQuestion || !record || !conversation || isSending) return
+    if (!cleanQuestion || !record || !conversation || sending.current) return
+    sending.current = true
+    const epoch = roomEpoch.current
     const userMessage: ScreeningChatMessage = { role: 'user', content: cleanQuestion }
     const nextMessages = [...messages, userMessage]
     setMessages(nextMessages)
@@ -77,16 +89,18 @@ export function HistoryChatPage() {
     try {
       await saveConversationMessage(conversation.id, userMessage)
       didPersistUserMessage = true
-      const assistantMessage: ScreeningChatMessage = cachedAnswer
-        ? { role: 'assistant', content: cachedAnswer.trim() }
-        : { role: 'assistant', content: (await askScreeningQuestion({
+      if (epoch !== roomEpoch.current) return
+      const response = cachedAnswer || await askScreeningQuestion({
           screening: screeningFromHistory(record),
           summary: record.executive_summary,
           messages: nextMessages.slice(-10),
-        })).answer.trim() }
+        })
+      const assistantMessage: ScreeningChatMessage = { ...response, role: 'assistant', content: response.answer.trim() }
       await saveConversationMessage(conversation.id, assistantMessage)
+      if (epoch !== roomEpoch.current) return
       setMessages((current) => [...current, assistantMessage])
     } catch (reason) {
+      if (epoch !== roomEpoch.current) return
       if (!didPersistUserMessage) {
         setMessages((current) => current.filter((message, index) => !(index === current.length - 1 && message === userMessage)))
         setDraft(cleanQuestion)
@@ -94,7 +108,7 @@ export function HistoryChatPage() {
       const message = reason instanceof Error ? reason.message : 'Jawaban belum dapat dibuat.'
       setError(didPersistUserMessage ? `${message} Pertanyaan Anda tetap tersimpan.` : message)
     } finally {
-      setIsSending(false)
+      if (epoch === roomEpoch.current) { sending.current = false; setIsSending(false) }
     }
   }
 
@@ -106,10 +120,11 @@ export function HistoryChatPage() {
       return
     }
     const screening = screeningFromHistory(record)
+    const epoch = roomEpoch.current
     void getSuggestedQuestions({ screening, summary: record.executive_summary })
-      .then((questions) => sendQuestion(requestedQuestion, questions.find((item) => item.question === requestedQuestion)?.answer))
-      .catch(() => sendQuestion(requestedQuestion))
-      .finally(() => window.history.replaceState({}, document.title, window.location.pathname))
+      .then((questions) => { if (epoch === roomEpoch.current) return sendQuestion(requestedQuestion, questions.find((item) => item.question === requestedQuestion)) })
+      .catch(() => { if (epoch === roomEpoch.current) return sendQuestion(requestedQuestion) })
+      .finally(() => { if (epoch === roomEpoch.current) window.history.replaceState({}, document.title, window.location.pathname) })
   // A suggested question is intentionally sent once per opened room.
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [record, conversation, isLoading, messages, requestedQuestion])
@@ -168,7 +183,7 @@ export function HistoryChatPage() {
                 <SuggestedQuestionStarter
                   screening={screeningFromHistory(record)}
                   summary={record.executive_summary}
-                  onSelect={(item: SuggestedQuestion) => { void sendQuestion(item.question, item.answer) }}
+                  onSelect={(item: SuggestedQuestion) => { void sendQuestion(item.question, item) }}
                 />
               )}
               <div
@@ -181,7 +196,7 @@ export function HistoryChatPage() {
                 }}
               >
                 {messages.map((message, index) => (
-                  <div className={`app-chat-bubble app-chat-bubble--${message.role}`} key={`${message.role}-${index}`}><ChatMessageContent text={message.content} /></div>
+                  <div className={`app-chat-bubble app-chat-bubble--${message.role}`} key={`${message.role}-${index}`}><ChatMessageContent text={message.content} citations={message.citations} /></div>
                 ))}
                 {isSending && <div className="app-chat-bubble app-chat-bubble--loading" aria-label="Menyiapkan penjelasan"><span /><span /><span /><p>Menyusun penjelasan…</p></div>}
               </div>

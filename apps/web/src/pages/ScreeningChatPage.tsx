@@ -14,18 +14,20 @@ import {
   type ScreeningResult,
   type SuggestedQuestion,
 } from '../lib/screening-api'
-import { getActiveScreening, saveActiveScreening, setActiveScreeningChatAccess } from '../lib/screening-session'
+import { getActiveScreening, saveActiveScreening, setActiveScreeningChatAccess, getSessionChat, saveSessionChat } from '../lib/screening-session'
 import { SuggestedQuestionStarter } from '../components/SuggestedQuestionStarter'
+import { ChatSources } from '../components/ChatSources'
+import type { ChatCitation } from '../lib/screening-api'
 
-function renderInlineMarkdown(text: string): ReactNode[] {
+function renderInlineMarkdown(text: string, renderCitation: (text: string) => ReactNode): ReactNode[] {
   return text.split(/(\*\*[^*]+\*\*|\*[^*]+\*)/g).filter(Boolean).map((part, index) => {
-    if (part.startsWith('**') && part.endsWith('**')) return <strong key={index}>{part.slice(2, -2)}</strong>
-    if (part.startsWith('*') && part.endsWith('*')) return <em key={index}>{part.slice(1, -1)}</em>
-    return <Fragment key={index}>{part}</Fragment>
+    if (part.startsWith('**') && part.endsWith('**')) return <strong key={index}>{renderCitation(part.slice(2, -2))}</strong>
+    if (part.startsWith('*') && part.endsWith('*')) return <em key={index}>{renderCitation(part.slice(1, -1))}</em>
+    return <Fragment key={index}>{renderCitation(part)}</Fragment>
   })
 }
 
-export function ChatMessageContent({ text }: { text: string }) {
+export function ChatMessageContent({ text, citations }: { text: string; citations?: ChatCitation[] }) {
   const blocks: Array<{ kind: 'paragraph' | 'list'; lines: string[] }> = []
   let paragraph: string[] = []
   let list: string[] = []
@@ -60,11 +62,11 @@ export function ChatMessageContent({ text }: { text: string }) {
   flushList()
 
   return (
-    <>
+    <ChatSources text={text} citations={citations} renderText={(_text, renderCitation) => <>
       {blocks.map((block, index) => block.kind === 'list' ? (
-        <ul key={index}>{block.lines.map((line, lineIndex) => <li key={lineIndex}>{renderInlineMarkdown(line)}</li>)}</ul>
-      ) : <p key={index}>{renderInlineMarkdown(block.lines[0])}</p>)}
-    </>
+        <ul key={index}>{block.lines.map((line, lineIndex) => <li key={lineIndex}>{renderInlineMarkdown(line, renderCitation)}</li>)}</ul>
+      ) : <p key={index}>{renderInlineMarkdown(block.lines[0], renderCitation)}</p>)}
+    </>} />
   )
 }
 
@@ -79,15 +81,23 @@ export function ScreeningChatPage() {
   const [error, setError] = useState<string | null>(null)
   const [temporaryAccessApproved, setTemporaryAccessApproved] = useState(() => getActiveScreening(screeningId)?.chatAccess === 'temporary')
   const initialQuestionSent = useRef(false)
+  const roomEpoch = useRef(0)
+  const sending = useRef(false)
   const messagesRef = useRef<HTMLDivElement | null>(null)
   const shouldFollowMessages = useRef(false)
   const requestedQuestion = new URLSearchParams(window.location.search).get('question')?.trim() || ''
 
   useEffect(() => {
     let active = true
+    roomEpoch.current += 1
+    sending.current = false
+    setIsSending(false)
+    setScreening(null)
+    setSummary(null)
+    setDraft('')
     setIsLoadingContext(true)
     setError(null)
-    setMessages([])
+    setMessages(getSessionChat(screeningId))
     initialQuestionSent.current = false
     setTemporaryAccessApproved(getActiveScreening(screeningId)?.chatAccess === 'temporary')
 
@@ -130,39 +140,52 @@ export function ScreeningChatPage() {
       }
     })()
 
-    return () => { active = false }
+    return () => { active = false; roomEpoch.current += 1 }
   }, [screeningId])
 
-  async function sendQuestion(question: string, cachedAnswer?: string) {
+  async function sendQuestion(question: string, cachedAnswer?: SuggestedQuestion) {
     const cleanQuestion = question.trim()
-    if (!cleanQuestion || !screening || isSending) return
+    if (!cleanQuestion || !screening || sending.current) return
+    sending.current = true
+    const epoch = roomEpoch.current
     const nextMessages = [...messages, { role: 'user' as const, content: cleanQuestion }]
     setMessages(nextMessages)
+    saveSessionChat(screeningId, nextMessages)
     setDraft('')
     setError(null)
     setIsSending(true)
     shouldFollowMessages.current = true
     try {
       if (cachedAnswer) {
-        setMessages((current) => [...current, { role: 'assistant', content: cachedAnswer.trim() }])
+        const completed: ScreeningChatMessage[] = [...nextMessages, { ...cachedAnswer, role: 'assistant', content: cachedAnswer.answer.trim() }]
+        setMessages(completed)
+        if (!saveSessionChat(screeningId, completed)) setError('Jawaban tampil, tetapi browser belum dapat menyimpan sesi ini untuk dimuat ulang.')
       } else {
         const response = await askScreeningQuestion({ screening, summary, messages: nextMessages })
-        setMessages((current) => [...current, { role: 'assistant', content: response.answer.trim() }])
+        if (epoch !== roomEpoch.current) return
+        const completed: ScreeningChatMessage[] = [...nextMessages, { ...response, role: 'assistant', content: response.answer.trim() }]
+        setMessages(completed)
+        if (!saveSessionChat(screeningId, completed)) setError('Jawaban tampil, tetapi browser belum dapat menyimpan sesi ini untuk dimuat ulang.')
       }
     } catch (reason) {
-      setError(reason instanceof Error ? reason.message : 'Jawaban belum dapat dibuat.')
+      if (epoch === roomEpoch.current) setError(reason instanceof Error ? reason.message : 'Jawaban belum dapat dibuat.')
     } finally {
-      setIsSending(false)
+      if (epoch === roomEpoch.current) { sending.current = false; setIsSending(false) }
     }
   }
 
   useEffect(() => {
     if (isLoadingContext || !screening || !temporaryAccessApproved || !requestedQuestion || initialQuestionSent.current) return
     initialQuestionSent.current = true
+    if (getSessionChat(screeningId).some((message) => message.role === 'user' && message.content.trim() === requestedQuestion)) {
+      window.history.replaceState({}, document.title, window.location.pathname)
+      return
+    }
+    const epoch = roomEpoch.current
     void getSuggestedQuestions({ screening, summary })
-      .then((questions) => sendQuestion(requestedQuestion, questions.find((item) => item.question === requestedQuestion)?.answer))
-      .catch(() => sendQuestion(requestedQuestion))
-      .finally(() => window.history.replaceState({}, document.title, window.location.pathname))
+      .then((questions) => { if (epoch === roomEpoch.current) return sendQuestion(requestedQuestion, questions.find((item) => item.question === requestedQuestion)) })
+      .catch(() => { if (epoch === roomEpoch.current) return sendQuestion(requestedQuestion) })
+      .finally(() => { if (epoch === roomEpoch.current) window.history.replaceState({}, document.title, window.location.pathname) })
   // The requested suggestion must only be submitted once per route open.
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [screening, temporaryAccessApproved, isLoadingContext, requestedQuestion])
@@ -231,7 +254,7 @@ export function ScreeningChatPage() {
                 <p>Jawaban bersifat edukatif dan membantu Anda menyiapkan diskusi dengan dokter spesialis mata (Sp.M).</p>
               </header>
               {messages.length === 0 && !isSending && (
-                <SuggestedQuestionStarter screening={screening} summary={summary} onSelect={(item: SuggestedQuestion) => { void sendQuestion(item.question, item.answer) }} />
+                <SuggestedQuestionStarter screening={screening} summary={summary} onSelect={(item: SuggestedQuestion) => { void sendQuestion(item.question, item) }} />
               )}
               <div
                 className="app-history-chat__messages"
@@ -242,7 +265,7 @@ export function ScreeningChatPage() {
                   shouldFollowMessages.current = element.scrollHeight - element.scrollTop - element.clientHeight < 40
                 }}
               >
-                {messages.map((message, index) => <div className={`app-chat-bubble app-chat-bubble--${message.role}`} key={`${message.role}-${index}`}><ChatMessageContent text={message.content} /></div>)}
+                {messages.map((message, index) => <div className={`app-chat-bubble app-chat-bubble--${message.role}`} key={`${message.role}-${index}`}><ChatMessageContent text={message.content} citations={message.citations} /></div>)}
                 {isSending && <div className="app-chat-bubble app-chat-bubble--loading" aria-label="Menyiapkan penjelasan"><span /><span /><span /><p>Menyusun penjelasan…</p></div>}
               </div>
               {error && <p className="app-chat-thread__error" role="alert">{error}</p>}
