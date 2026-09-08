@@ -44,6 +44,10 @@ MAX_UPLOAD_BYTES = 10 * 1024 * 1024
 MIN_IMAGE_DIMENSION = 224
 MAX_IMAGE_DIMENSION = 4096
 DEFAULT_GEMINI_MODEL = "gemma-4-26b-a4b-it"
+# Modal permits this endpoint to execute for 300 seconds. Keep the provider
+# deadline aligned so an otherwise active generation is not cut off at 120s.
+# This is operational configuration, not a secret or Modal environment variable.
+RAG_PROVIDER_TIMEOUT_MS = 300_000
 MAX_USER_CHAT_CHARS = 900
 MAX_ASSISTANT_CHAT_CHARS = 4000
 MAX_PDF_IMAGE_BYTES = 10 * 1024 * 1024
@@ -167,7 +171,9 @@ class ScreeningChatResponse(BaseModel):
 class SuggestedQuestion(BaseModel):
     id: str = Field(pattern=r"^[a-z0-9-]{3,64}$")
     question: str = Field(min_length=12, max_length=180)
-    answer: str = Field(min_length=40, max_length=4000)
+    # Atomic mode uses these objects only as navigation prompts. Existing
+    # legacy packs retain their pre-generated answer and stay compatible.
+    answer: str | None = Field(default=None, min_length=40, max_length=4000)
     citations: list[Citation] = Field(default_factory=list, max_length=24)
     source_status: Literal["grounded", "insufficient_evidence", "application_context"] | None = None
     corpus_version: str | None = None
@@ -447,23 +453,50 @@ def rag_enabled() -> bool:
     return bool(os.getenv("NAYANA_RAG_VERSION", "").strip())
 
 
-def rag_completion(instruction: str, payload: str) -> str:
+def rag_completion(instruction: str, payload: str, response_schema: dict | None = None) -> str:
+    from rag.stream import ProviderStreamIncomplete, collect_json_stream
     from google import genai
     from google.genai import types
+    from rag.citations import as_genai_schema
     key = os.getenv("GEMINI_API_KEY")
     if not key:
         raise HTTPException(status_code=503, detail="Percakapan hasil belum diaktifkan.")
     client = genai.Client(api_key=key)
+    model = os.getenv("GEMINI_MODEL", DEFAULT_GEMINI_MODEL)
+    started_at = time.monotonic()
     try:
-        response = client.models.generate_content(
-            model=os.getenv("GEMINI_MODEL", DEFAULT_GEMINI_MODEL), contents=payload,
+        response_stream = client.models.generate_content_stream(
+            model=model,
+            contents=payload,
             config=types.GenerateContentConfig(
-                temperature=0.3, response_mime_type="application/json",
-                thinking_config=types.ThinkingConfig(thinking_level="HIGH", include_thoughts=False),
+                thinking_config=types.ThinkingConfig(thinking_level="HIGH"),
+                http_options=types.HttpOptions(timeout=RAG_PROVIDER_TIMEOUT_MS),
+                response_mime_type="application/json",
+                response_schema=as_genai_schema(response_schema, types) if response_schema is not None else None,
                 system_instruction=instruction,
             ),
         )
-        return response_text_without_thoughts(response)
+        # Structured-output streams are valid partial JSON strings. Join every
+        # non-thought chunk before the server parser sees it; never parse an
+        # arbitrary mid-stream fragment as a complete response.
+        response_text = collect_json_stream(response_stream)
+        logger.info(
+            "NEI provider completed model=%s elapsed_seconds=%.2f response_characters=%d",
+            model, time.monotonic() - started_at, len(response_text),
+        )
+        return response_text
+    except ProviderStreamIncomplete as error:
+        logger.warning(
+            "NEI provider stopped early model=%s elapsed_seconds=%.2f finish_reason=%s response_characters=%d",
+            model, time.monotonic() - started_at, error.reason, error.response_characters,
+        )
+        raise
+    except Exception as error:
+        logger.warning(
+            "NEI provider request failed model=%s elapsed_seconds=%.2f error_type=%s",
+            model, time.monotonic() - started_at, type(error).__name__,
+        )
+        raise
     finally:
         client.close()
 
@@ -631,7 +664,7 @@ def parse_suggested_questions(response_text: str) -> SuggestedQuestionResponse:
     clean_questions: list[SuggestedQuestion] = []
     for item in response.questions:
         normalized_question = normalize_public_language(item.question).strip()
-        normalized_answer = normalize_public_language(item.answer).strip()
+        normalized_answer = normalize_public_language(item.answer).strip() if item.answer else None
         question_key = normalized_question.casefold()
         if item.id in seen_ids or question_key in seen_questions:
             raise ValueError("Pertanyaan pemantik perlu unik.")
@@ -643,7 +676,11 @@ def parse_suggested_questions(response_text: str) -> SuggestedQuestionResponse:
 
 def generate_suggested_questions(payload: SuggestedQuestionRequest) -> SuggestedQuestionResponse:
     if rag_enabled():
-        from rag.service import suggestion_pack
+        from rag.service import ATOMIC_CITATION_MODE, atomic_starter_questions, citation_mode, suggestion_pack
+        if citation_mode() == ATOMIC_CITATION_MODE:
+            # These are UI navigation prompts, not provider-produced medical
+            # answers. Selecting one always invokes the one grounded chat flow.
+            return SuggestedQuestionResponse(questions=atomic_starter_questions(payload.screening.top_prediction.key))
         key = suggestion_cache_key(payload.screening)
         # Coalesce only identical packs; unrelated screening categories must not
         # wait behind one slow generation request.
@@ -932,7 +969,18 @@ def build_demo_result(case_id: str, screening_id: str) -> ScreeningResult:
 def health_check():
     rag_version = os.getenv("NAYANA_RAG_VERSION", "").strip()
     seeded_topics = []
+    citation_mode_name = "legacy"
+    atomic_ready = False
     if rag_version:
+        try:
+            from rag.service import citation_mode
+            citation_mode_name = citation_mode()
+            if citation_mode_name == "atomic":
+                from rag.atomic import load_atomic_manifest
+                load_atomic_manifest(Path(os.getenv("NAYANA_RAG_ARTIFACTS", "/rag-data")) / "versions" / rag_version)
+                atomic_ready = True
+        except (OSError, RuntimeError, ValueError):
+            atomic_ready = False
         suggestion_dir = Path(os.getenv("NAYANA_RAG_ARTIFACTS", "/rag-data")) / "versions" / rag_version / "suggestions"
         seeded_topics = [topic for topic in ("cataract", "diabetic_retinopathy", "glaucoma", "normal")
                          if (suggestion_dir / f"{topic}.json").is_file()
@@ -949,8 +997,10 @@ def health_check():
             "configured": rag_enabled(),
             "version": rag_version or None,
             "sources": 5 if rag_enabled() else 0,
+            "citation_mode": citation_mode_name,
+            "atomic_ready": atomic_ready,
             "seeded_suggestion_topics": seeded_topics,
-            "ready": bool(rag_version) and len(seeded_topics) == 4,
+            "ready": bool(rag_version) and (atomic_ready if citation_mode_name == "atomic" else len(seeded_topics) == 4),
         },
     }
 

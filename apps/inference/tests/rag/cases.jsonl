@@ -1,4 +1,4 @@
-{"id":"d01","split":"development","question":"Apa itu katarak?","expected_sources":["cataracts"],"heading":"what are cataracts"}
+{"id":"d01","split":"development","question":"Apa itu katarak?","expected_sources":["cataracts"],"heading":"what are cataracts|at a glance"}
 {"id":"d02","split":"development","question":"Penyebab katarak itu apa?","expected_sources":["cataracts"],"heading":"cause"}
 {"id":"d03","split":"development","question":"Gejala katarak biasanya apa saja?","expected_sources":["cataracts"],"heading":"symptom"}
 {"id":"d04","split":"development","question":"Siapa yang berisiko katarak?","expected_sources":["cataracts"],"heading":"risk"}
@@ -13,7 +13,7 @@
 {"id":"d13","split":"development","question":"Bagaimana pemeriksaan retinopati diabetik dilakukan?","expected_sources":["diabetic-retinopathy"],"heading":"check"}
 {"id":"d14","split":"development","question":"Pilihan penanganan retinopati diabetik apa saja secara umum?","expected_sources":["diabetic-retinopathy"],"heading":"treatment"}
 {"id":"d15","split":"development","question":"Bagaimana mencegah retinopati diabetik?","expected_sources":["diabetic-retinopathy"],"heading":"prevent"}
-{"id":"d16","split":"development","question":"Apa itu glaukoma?","expected_sources":["glaucoma"],"heading":"what is"}
+{"id":"d16","split":"development","question":"Apa itu glaukoma?","expected_sources":["glaucoma"],"heading":"what is|at a glance"}
 {"id":"d17","split":"development","question":"Apa penyebab glaukoma?","expected_sources":["glaucoma"],"heading":"cause"}
 {"id":"d18","split":"development","question":"Apa gejala glaukoma?","expected_sources":["glaucoma"],"heading":"symptom"}
 {"id":"d19","split":"development","question":"Siapa yang berisiko glaukoma?","expected_sources":["glaucoma"],"heading":"risk"}
