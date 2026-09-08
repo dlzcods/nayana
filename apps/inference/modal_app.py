@@ -17,15 +17,7 @@ image = (
     .pip_install("torch==2.8.0+cpu", index_url="https://download.pytorch.org/whl/cpu")
     .pip_install_from_requirements(LOCAL_DIR / "requirements.api.txt")
     .pip_install_from_requirements(LOCAL_DIR / "requirements.rag.txt")
-    # Bake the multilingual NLI verifier into the image. Runtime must never
-    # download model weights while a user waits for a chat response.
-    .run_commands(
-        "python -c \"from transformers import AutoModelForSequenceClassification, AutoTokenizer; "
-        "name='MoritzLaurer/mDeBERTa-v3-base-xnli-multilingual-nli-2mil7'; "
-        "AutoTokenizer.from_pretrained(name).save_pretrained('/root/nli-model'); "
-        "AutoModelForSequenceClassification.from_pretrained(name).save_pretrained('/root/nli-model')\""
-    )
-    .env({"NAYANA_RAG_ARTIFACTS": "/rag-data", "NAYANA_RAG_REQUIRE_SEEDED_SUGGESTIONS": "1",
+    .env({"NAYANA_RAG_ARTIFACTS": "/rag-data",
           "TOKENIZERS_PARALLELISM": "false", "USE_TF": "0"})
     .add_local_dir(LOCAL_DIR / "rag", f"{REMOTE_DIR}/rag")
     .add_local_file(LOCAL_DIR / "nayana_api.py", f"{REMOTE_DIR}/nayana_api.py")

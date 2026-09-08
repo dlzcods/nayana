@@ -28,8 +28,7 @@ def check(version: str, suggestions_only: bool = False, seed_all: bool = False, 
     from google import genai
     from google.genai import types
     from rag.citations import as_genai_schema
-    from rag.service import (ATOMIC_CITATION_MODE, answer_question, atomic_starter_questions,
-                             citation_mode, suggestion_pack)
+    from rag.service import answer_question, starter_questions
     from rag.common import write_json
 
     def complete(instruction, payload, response_schema=None):
@@ -43,7 +42,7 @@ def check(version: str, suggestions_only: bool = False, seed_all: bool = False, 
                     # This is an offline, one-time seed. Keep HIGH reasoning,
                     # but cap the compact structured response at 4K tokens and
                     # give the provider a full five-minute request deadline.
-                    max_output_tokens=9200,
+                    max_output_tokens=4096,
                     http_options=types.HttpOptions(timeout=300000),
                     response_mime_type="application/json",
                     response_schema=as_genai_schema(response_schema, types) if response_schema is not None else None,
@@ -80,37 +79,17 @@ def check(version: str, suggestions_only: bool = False, seed_all: bool = False, 
         answers = [] if suggestions_only else list(pool.map(run, cases))
     try:
         start = time.monotonic()
-        raw_suggestion_outputs = []
-        def complete_suggestions(instruction, payload, response_schema=None):
-            output = complete(instruction, payload, response_schema)
-            raw_suggestion_outputs.append(output)
-            return output
         allowed_topics = ("cataract", "diabetic_retinopathy", "glaucoma", "normal")
         if seed_topic and seed_topic not in allowed_topics:
             raise ValueError("seed_topic must be cataract, diabetic_retinopathy, glaucoma, or normal")
         topics = allowed_topics if seed_all else (seed_topic or "cataract",)
-        seeding = seed_all or bool(seed_topic)
-        if citation_mode() == ATOMIC_CITATION_MODE:
-            # Atomic mode has deterministic navigation prompts. It must never
-            # call the provider merely to make the chat entry UI available.
-            packs = {topic: atomic_starter_questions(topic) for topic in topics}
-        else:
-            def make_pack(topic):
-                return topic, suggestion_pack(topic, {"top_category":topic, "screening_only":True},
-                                              # Seeding is idempotent: a valid pack is a durable
-                                              # reviewed artifact, not something to regenerate on
-                                              # every check (and therefore not dependent on a live
-                                              # provider during temporary demand spikes).
-                                              complete_suggestions, use_cache=True, persist=seeding,
-                                              checkpoint_commit=volume.commit)
-            with ThreadPoolExecutor(max_workers=2) as pool:
-                packs = dict(pool.map(make_pack, topics))
+        packs = {topic: starter_questions(topic) for topic in topics}
         representative = packs.get("cataract") or next(iter(packs.values()))
         pack = {"questions": representative, "packs": packs,
                 "seconds": round(time.monotonic() - start, 2)}
     except Exception as error:
         pack = {"error_type": type(error).__name__, "error": str(error)[:500],
-                "raw": raw_suggestion_outputs[-1][:10000] if raw_suggestion_outputs else None}
+                "raw": None}
     report = {"version": version, "answers": answers, "suggestions": pack,
               "note":"Synthetic engineering checks; source entailment requires reviewing the saved answers/excerpts, not just status_matches."}
     write_json(Path("/rag-data/versions") / version / "generation-evaluation.json", report)

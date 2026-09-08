@@ -20,7 +20,7 @@ def digest(value: str | bytes) -> str:
 
 
 def write_json(path: Path, value: object) -> None:
-    """Atomic artifact writes: an interrupted run cannot replace a good snapshot."""
+    """Safe artifact writes: an interrupted run cannot replace a good snapshot."""
     path.parent.mkdir(parents=True, exist_ok=True)
     temporary = path.with_suffix(path.suffix + ".tmp")
     temporary.write_text(json.dumps(value, ensure_ascii=False, indent=2) + "\n")

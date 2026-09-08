@@ -23,7 +23,6 @@ from functools import lru_cache
 from io import BytesIO
 from pathlib import Path
 from typing import Literal
-import threading
 
 import numpy as np
 import tensorflow as tf
@@ -171,8 +170,8 @@ class ScreeningChatResponse(BaseModel):
 class SuggestedQuestion(BaseModel):
     id: str = Field(pattern=r"^[a-z0-9-]{3,64}$")
     question: str = Field(min_length=12, max_length=180)
-    # Atomic mode uses these objects only as navigation prompts. Existing
-    # legacy packs retain their pre-generated answer and stay compatible.
+    # RAG starter chips are navigation prompts. Selecting one always runs the
+    # normal grounded chat request rather than displaying a cached answer.
     answer: str | None = Field(default=None, min_length=40, max_length=4000)
     citations: list[Citation] = Field(default_factory=list, max_length=24)
     source_status: Literal["grounded", "insufficient_evidence", "application_context"] | None = None
@@ -445,8 +444,6 @@ Setiap item wajib memiliki `id` berupa slug unik huruf kecil dan strip, `questio
 SUGGESTION_CACHE_TTL_SECONDS = 60 * 60
 SUGGESTION_CACHE_MAX_ITEMS = 48
 _suggestion_cache: dict[str, tuple[float, SuggestedQuestionResponse]] = {}
-_rag_suggestion_guard = threading.Lock()
-_rag_suggestion_inflight: dict[str, threading.Event] = {}
 
 
 def rag_enabled() -> bool:
@@ -471,6 +468,7 @@ def rag_completion(instruction: str, payload: str, response_schema: dict | None 
             config=types.GenerateContentConfig(
                 thinking_config=types.ThinkingConfig(thinking_level="HIGH"),
                 http_options=types.HttpOptions(timeout=RAG_PROVIDER_TIMEOUT_MS),
+                max_output_tokens=4096,
                 response_mime_type="application/json",
                 response_schema=as_genai_schema(response_schema, types) if response_schema is not None else None,
                 system_instruction=instruction,
@@ -676,45 +674,8 @@ def parse_suggested_questions(response_text: str) -> SuggestedQuestionResponse:
 
 def generate_suggested_questions(payload: SuggestedQuestionRequest) -> SuggestedQuestionResponse:
     if rag_enabled():
-        from rag.service import ATOMIC_CITATION_MODE, atomic_starter_questions, citation_mode, suggestion_pack
-        if citation_mode() == ATOMIC_CITATION_MODE:
-            # These are UI navigation prompts, not provider-produced medical
-            # answers. Selecting one always invokes the one grounded chat flow.
-            return SuggestedQuestionResponse(questions=atomic_starter_questions(payload.screening.top_prediction.key))
-        key = suggestion_cache_key(payload.screening)
-        # Coalesce only identical packs; unrelated screening categories must not
-        # wait behind one slow generation request.
-        with _rag_suggestion_guard:
-            cached = _suggestion_cache.get(key)
-            if cached and time.monotonic() - cached[0] < SUGGESTION_CACHE_TTL_SECONDS:
-                return cached[1]
-            event = _rag_suggestion_inflight.get(key)
-            owner = event is None
-            if owner:
-                event = threading.Event()
-                _rag_suggestion_inflight[key] = event
-        if not owner:
-            event.wait(timeout=115)
-            cached = _suggestion_cache.get(key)
-            if cached and time.monotonic() - cached[0] < SUGGESTION_CACHE_TTL_SECONDS:
-                return cached[1]
-            raise HTTPException(status_code=503, detail="Pertanyaan bersumber belum tersedia. Anda tetap dapat menulis pertanyaan sendiri.")
-        try:
-            try:
-                questions = suggestion_pack(payload.screening.top_prediction.key,
-                                            build_summary_context(payload.screening), rag_completion)
-                result = SuggestedQuestionResponse(questions=questions)
-                if len(_suggestion_cache) >= SUGGESTION_CACHE_MAX_ITEMS:
-                    _suggestion_cache.pop(next(iter(_suggestion_cache)))
-                _suggestion_cache[key] = (time.monotonic(), result)
-                return result
-            except Exception as error:
-                logger.warning("NEI suggestions unavailable (%s)", type(error).__name__)
-                raise HTTPException(status_code=503, detail="Pertanyaan bersumber belum tersedia. Anda tetap dapat menulis pertanyaan sendiri.") from None
-        finally:
-            with _rag_suggestion_guard:
-                _rag_suggestion_inflight.pop(key, None)
-                event.set()
+        from rag.service import starter_questions
+        return SuggestedQuestionResponse(questions=starter_questions(payload.screening.top_prediction.key))
     key = suggestion_cache_key(payload.screening)
     now = time.monotonic()
     cached = _suggestion_cache.get(key)
@@ -968,23 +929,6 @@ def build_demo_result(case_id: str, screening_id: str) -> ScreeningResult:
 @app.get("/v1/health")
 def health_check():
     rag_version = os.getenv("NAYANA_RAG_VERSION", "").strip()
-    seeded_topics = []
-    citation_mode_name = "legacy"
-    atomic_ready = False
-    if rag_version:
-        try:
-            from rag.service import citation_mode
-            citation_mode_name = citation_mode()
-            if citation_mode_name == "atomic":
-                from rag.atomic import load_atomic_manifest
-                load_atomic_manifest(Path(os.getenv("NAYANA_RAG_ARTIFACTS", "/rag-data")) / "versions" / rag_version)
-                atomic_ready = True
-        except (OSError, RuntimeError, ValueError):
-            atomic_ready = False
-        suggestion_dir = Path(os.getenv("NAYANA_RAG_ARTIFACTS", "/rag-data")) / "versions" / rag_version / "suggestions"
-        seeded_topics = [topic for topic in ("cataract", "diabetic_retinopathy", "glaucoma", "normal")
-                         if (suggestion_dir / f"{topic}.json").is_file()
-                         and (suggestion_dir / f"{topic}.sha256.json").is_file()]
     return {
         "status": "ready" if MODEL_PATH.is_dir() else "needs_model",
         "model_version": MODEL_VERSION,
@@ -997,10 +941,8 @@ def health_check():
             "configured": rag_enabled(),
             "version": rag_version or None,
             "sources": 5 if rag_enabled() else 0,
-            "citation_mode": citation_mode_name,
-            "atomic_ready": atomic_ready,
-            "seeded_suggestion_topics": seeded_topics,
-            "ready": bool(rag_version) and (atomic_ready if citation_mode_name == "atomic" else len(seeded_topics) == 4),
+            "citation_mode": "paragraph",
+            "ready": bool(rag_version),
         },
     }
 

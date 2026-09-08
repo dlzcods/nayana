@@ -8,7 +8,6 @@ import threading
 
 from .common import ARTIFACTS
 from .index import load_manifest
-from .atomic import atomic_path, load_atomic_manifest
 
 TOPIC_NAMES = {"cataract": "cataracts katarak", "diabetic_retinopathy": "diabetic retinopathy retinopati diabetik",
                "glaucoma": "glaucoma glaukoma", "normal": "eye health healthy vision"}
@@ -34,37 +33,6 @@ HEADING_INTENTS = (
     (r"obat|terapi|operasi|ditangani|penanganan|pilihan.*tangan|sembuh", r"treat|medicine|surgery"),
     (r"cegah|mencegah|menjaga|lindungi", r"prevent|protect|healthy"),
 )
-
-
-def _sort_atomic_ranked(ranked: list[tuple[bool, float, float, int]]) -> list[tuple[bool, float, float, int]]:
-    """Prioritize an explicitly matching NEI heading over generic similarity."""
-    return sorted(ranked, reverse=True, key=lambda item: (item[0], item[1]))
-
-
-def _select_diverse_atomic_units(ranked: list[tuple[bool, float, float, int]], units: list[dict], limit: int) -> list[tuple[float, int]]:
-    """Choose distinct headings before allowing another unit from one heading.
-
-    Atomic units from the same section are often adjacent in embedding space.
-    Returning two of them before another relevant heading wastes scarce evidence
-    slots and caused the observed treatment/examination misses.
-    """
-    selected: list[tuple[float, int]] = []
-    deferred: list[tuple[float, int]] = []
-    used_sections: set[tuple[str, str]] = set()
-    for _, _, raw_score, index in ranked:
-        unit = units[index]
-        section = (unit["source_id"], unit["heading"])
-        if section in used_sections:
-            deferred.append((raw_score, index))
-            continue
-        selected.append((raw_score, index))
-        used_sections.add(section)
-        if len(selected) == limit:
-            return selected
-    # A short source may contain fewer distinct headings than the evidence
-    # budget. Only then do we use another sentence from an already selected one.
-    selected.extend(deferred[:max(0, limit - len(selected))])
-    return selected
 
 
 def expand_intent(query: str, question: str) -> str:
@@ -142,8 +110,6 @@ class Retriever:
 
 _retriever: Retriever | None = None
 _load_lock = threading.Lock()
-_atomic_retriever = None
-_atomic_load_lock = threading.Lock()
 
 
 def get_retriever() -> Retriever:
@@ -155,74 +121,3 @@ def get_retriever() -> Retriever:
                 raise RuntimeError("Set a tested NAYANA_RAG_VERSION before enabling RAG")
             _retriever = Retriever(ARTIFACTS / "versions" / version)
     return _retriever
-
-
-class AtomicRetriever:
-    """Retrieve immutable NEI source units for claim-level attribution.
-
-    It shares the parent version's pinned encoder but never reads or modifies
-    the legacy FAISS index.
-    """
-
-    def __init__(self, version_path: Path):
-        import faiss
-        from sentence_transformers import SentenceTransformer
-
-        self.parent_manifest = load_manifest(version_path)
-        self.manifest = load_atomic_manifest(version_path)
-        self.version = self.parent_manifest["version"]
-        self.units = json.loads((atomic_path(version_path) / "units.json").read_text())
-        self.index = faiss.read_index(str(atomic_path(version_path) / "index.faiss"))
-        if self.index.d != 384 or self.index.ntotal != len(self.units):
-            raise ValueError("Atomic index/source-unit mismatch")
-        self.encoder = SentenceTransformer(str(version_path / "encoder"), device="cpu", local_files_only=True)
-        self.encoder.max_seq_length = 512
-        self.lock = threading.Lock()
-
-    def search(self, query: str, limit: int = 3) -> list[dict]:
-        import numpy as np
-
-        if not 1 <= limit <= 3:
-            raise ValueError("Atomic retrieval limit must be between one and three")
-        tokens = self.encoder.tokenizer.encode("query: " + query, add_special_tokens=False)
-        if len(tokens) > 500:
-            query = self.encoder.tokenizer.decode(tokens[:500], skip_special_tokens=True)
-        else:
-            query = "query: " + query
-        with self.lock:
-            vector = self.encoder.encode([query], normalize_embeddings=True, show_progress_bar=False)
-        # The corpus is intentionally tiny (five NEI articles). Search every
-        # atomic unit, then apply the transparent heading rerank below. This is
-        # substantially cheaper and more auditable than adding a second model
-        # or a hosted reranker, and prevents a relevant section just outside a
-        # top-24 semantic shortlist from being invisible.
-        scores, indices = self.index.search(np.asarray(vector, dtype="float32"), len(self.units))
-        intents = [heading for pattern, heading in HEADING_INTENTS if re.search(pattern, query, re.I)]
-        ranked = []
-        for score, index in zip(scores[0], indices[0]):
-            if index < 0:
-                continue
-            unit = self.units[int(index)]
-            # Once the user explicitly asks for a definition, examination,
-            # treatment, etc., an NEI heading that directly answers that intent
-            # is a stronger signal than semantic similarity to a nearby risk or
-            # symptom sentence.  This is a deterministic priority, not another
-            # model call. Raw FAISS score remains the tie-breaker within that
-            # matching heading family.
-            intent_match = any(re.search(pattern, unit["heading"], re.I) for pattern in intents)
-            boost = .18 if intent_match else 0
-            ranked.append((intent_match, float(score) + boost, float(score), int(index)))
-        ranked = _sort_atomic_ranked(ranked)
-        return [{**self.units[index], "score": score, "corpus_version": self.version}
-                for score, index in _select_diverse_atomic_units(ranked, self.units, limit)]
-
-
-def get_atomic_retriever() -> AtomicRetriever:
-    global _atomic_retriever
-    with _atomic_load_lock:
-        version = os.getenv("NAYANA_RAG_VERSION", "").strip()
-        if not re.fullmatch(r"nei-[a-f0-9]{16}", version):
-            raise RuntimeError("Set a tested NAYANA_RAG_VERSION before enabling atomic citations")
-        if _atomic_retriever is None or _atomic_retriever.version != version:
-            _atomic_retriever = AtomicRetriever(ARTIFACTS / "versions" / version)
-    return _atomic_retriever

@@ -87,33 +87,17 @@ sitasi, evaluasi, dan urutan aktivasi produksi dijelaskan di
 `NAYANA_RAG_VERSION` diisi dengan versi kandidat yang telah diuji. Jangan pernah
 menaruh `FIRECRAWL_API_KEY` pada secret frontend atau file yang masuk Git.
 
-### Mode sitasi atomic (eksperimen reversible)
-
-Mode atomic dapat dipilih melalui konstanta `ACTIVE_CITATION_MODE` di
-`rag/service.py`; ini bukan environment variable atau secret. Ia memakai source
-unit kecil ber-ID tetap untuk mengikat setiap klaim Indonesia ke satu span NEI.
-Artifact atomic dibangun terpisah di bawah versi RAG yang sama dan tidak menimpa
-index/chunk legacy:
-
-```bash
-cd apps/inference
-modal run modal_rag_build.py
-```
-
-Release saat ini memakai `LEGACY_CITATION_MODE`: satu atau lebih source ID
-diikat ke setiap paragraf, lalu UI tetap dapat membuka/highlight excerpt artikel.
-Mode ini dipilih kembali setelah atomic claim-level menghasilkan abstensi palsu
-untuk pertanyaan yang sebenarnya didukung. Rollback atomic cukup mengubah
-konstanta ke `LEGACY_CITATION_MODE` lalu deploy ulang `modal_app.py`; tidak ada
-migrasi atau penghapusan chat/corpus.
-
 ### Perilaku provider chat
 
 Jawaban RAG tetap merupakan satu request dinamis: server mengambil evidence NEI
 yang relevan, lalu meminta Gemma menjawab dalam Bahasa Indonesia menggunakan ID
-bukti itu. Release legacy mengikat marker ke paragraf dan mempertahankan metadata
-lengkap server-side untuk kartu sitasi/highlight. Atomic mode tetap tersedia untuk
-eksperimen masa depan, tetapi bukan release aktif.
+bukti itu. Setiap paragraf diikat ke source ID yang diizinkan; server menempatkan
+marker, URL, dan excerpt sendiri untuk kartu sitasi/highlight. ID internal tidak
+boleh muncul dalam teks yang dirender dan dibersihkan atau ditolak di boundary
+server.
+
+Pertanyaan starter adalah navigasi deterministik per topik, bukan jawaban medis
+yang dicache. Memilihnya tetap mengirim satu request RAG biasa.
 
 Tidak ada retry otomatis atau jawaban fallback yang berpura-pura bersumber.
 Jika provider berhenti sebelum JSON lengkap, request gagal secara jujur. Modal

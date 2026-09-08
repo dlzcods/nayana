@@ -59,51 +59,17 @@ the available evidence does not answer a question, the API returns
 unknown source IDs, citation markers, personalized doses, and unsupported local
 facts such as current treatment prices.
 
-In legacy mode, suggested questions are generated as one six-item grounded pack,
-cached on the backend for one hour, and briefly reused in the browser. Duplicate
-requests for the same result are coalesced; unrelated categories are not
-serialized behind a global generation lock.
+Suggested-question chips are deterministic navigation prompts per screening
+topic, not cached medical answers. Selecting one sends exactly one normal
+grounded chat request. This keeps the first interaction responsive without
+manufacturing a clinical answer before the user asks it.
 
-Before production deploy, seed and validate each topic separately. Separate
-commands keep progress observable and make a provider timeout retryable without
-redoing the other topics:
-
-```bash
-modal run modal_rag_check.py --version VERSION --suggestions-only --seed-topic cataract
-modal run modal_rag_check.py --version VERSION --suggestions-only --seed-topic diabetic_retinopathy
-modal run modal_rag_check.py --version VERSION --suggestions-only --seed-topic glaucoma
-modal run modal_rag_check.py --version VERSION --suggestions-only --seed-topic normal
-```
-
-The production image requires these validated files and fails fast if a topic
-is missing instead of leaving the UI waiting through a long cold generation.
-
-## Reversible atomic citation experiment
-
-Atomic citation mode is selected by the application-code constant
-`ACTIVE_CITATION_MODE = ATOMIC_CITATION_MODE`. It keeps the parent
-RAG version and its legacy chunks/index immutable, then builds a sibling
-`atomic-citations-v1` artifact containing sentence/list-item source spans with
-permanent `source_unit_id` values. The atomic index reuses the saved encoder and
-does not add a hosted vector database or external search service.
-
-In this mode, six suggested-question chips are deterministic navigation prompts,
-not cached medical answers. Selecting one sends exactly one normal grounded chat
-request. The model receives at most three retrieved atomic source units and may
-attach each short Indonesian claim only to an ID in that packet. Server-side
-validation then owns marker placement and the citation-card source span.
-
-Build the atomic artifact before enabling the flag. The output reports both
-legacy `hit_at_4` and atomic `article_hit_at_3` plus heading-sensitive `hit_at_3`; inspect the held-out atomic scores and
-the saved `atomic-citations-v1/retrieval-evaluation.json` before moving on.
-
-```bash
-modal run modal_rag_build.py
-```
-
-Do not enable the mode until its evaluation and manual UAT pass. Rollback is
-non-destructive: set `ACTIVE_CITATION_MODE = LEGACY_CITATION_MODE` in
-`rag/service.py` and deploy `modal_app.py`; no corpus, chat, or Supabase data is deleted.
+The active citation contract is paragraph-level: the model can select only from
+the retrieved source IDs, while the server owns marker placement, URLs, excerpts,
+and citation-card metadata. The renderer never receives an opaque source ID as
+chat text; bracketed IDs are stripped and any remaining raw ID rejects the model
+output. This preserves readable source cards without treating model formatting as
+trusted.
 
 ## Evaluation boundary
 
@@ -119,12 +85,10 @@ validation or evidence that model output is medically infallible.
 Activation is intentionally manual and ordered:
 
 1. Apply `apps/supabase/migrations/20260906_0007_chat_citations.sql`.
-2. For legacy mode, seed all four topic packs with the commands above. For
-   atomic mode, build the separate atomic artifact instead.
-3. Add only the tested `NAYANA_RAG_VERSION` to the existing Modal secret
-   `nayana`; the citation mode is selected in code.
-4. Run `modal deploy modal_app.py` from `apps/inference`.
-5. Verify `/v1/health` reports `rag.ready: true` and the expected citation mode,
+2. Add only the tested `NAYANA_RAG_VERSION` to the existing Modal secret
+   `nayana`.
+3. Run `modal deploy modal_app.py` from `apps/inference`.
+4. Verify `/v1/health` reports `rag.ready: true` and `citation_mode: "paragraph"`,
    then test one grounded answer, one unsupported answer, suggested questions,
    citation expansion, refresh persistence, and a legacy chat row.
 

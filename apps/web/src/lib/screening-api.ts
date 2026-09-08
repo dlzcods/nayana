@@ -107,8 +107,8 @@ export type ScreeningChatMessage = GroundingMetadata & {
 export type SuggestedQuestion = GroundingMetadata & {
   id: string
   question: string
-  // Atomic citation mode returns navigation prompts only. Legacy cached packs
-  // may still include a fully grounded answer for backward compatibility.
+  // RAG starter prompts are navigation only. Older stored rows may still carry
+  // a fully grounded answer for backward compatibility.
   answer?: string | null
 }
 

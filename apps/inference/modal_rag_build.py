@@ -2,7 +2,6 @@
 
 From apps/inference: modal run modal_rag_build.py
 """
-from pathlib import Path
 import modal
 
 LOCAL = Path(__file__).resolve().parent
@@ -24,16 +23,13 @@ def build_and_evaluate():
     import shutil
     os.environ["NAYANA_RAG_ARTIFACTS"] = "/rag-data"
     shutil.copytree("/root/raw", "/rag-data/raw", dirs_exist_ok=True)
-    from rag.atomic import build_atomic
     from rag.index import build
-    from rag.evaluate import evaluate, evaluate_atomic
+    from rag.evaluate import evaluate
     manifest = build()
-    atomic_manifest = build_atomic(Path("/rag-data/versions") / manifest["version"])
+    from pathlib import Path
     report = evaluate(Path("/rag-data/versions") / manifest["version"], Path("/root/tests/rag/cases.jsonl"))
-    atomic_report = evaluate_atomic(Path("/rag-data/versions") / manifest["version"], Path("/root/tests/rag/cases.jsonl"))
     volume.commit()
-    return {"manifest": manifest, "atomic_manifest": atomic_manifest,
-            "evaluation": report, "atomic_evaluation": atomic_report}
+    return {"manifest": manifest, "evaluation": report}
 
 
 @app.local_entrypoint()
@@ -44,6 +40,4 @@ def main():
     write_json(ARTIFACTS / "build-result.json", result)
     print(json.dumps({"version": result["manifest"]["version"],
                       "chunks": result["manifest"]["chunk_count"],
-                      "atomic_units": result["atomic_manifest"]["unit_count"],
-                      "evaluation": result["evaluation"]["summary"],
-                      "atomic_evaluation": result["atomic_evaluation"]["summary"]}, indent=2))
+                      "evaluation": result["evaluation"]["summary"]}, indent=2))
