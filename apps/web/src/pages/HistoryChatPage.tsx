@@ -111,12 +111,14 @@ export function HistoryChatPage() {
         didPersistUserMessage = true
       }
       if (epoch !== roomEpoch.current) return
-      const response = cachedAnswer || await askScreeningQuestion({
+      const response = cachedAnswer?.answer ? cachedAnswer : await askScreeningQuestion({
           screening: screeningFromHistory(record),
           summary: record.executive_summary,
           messages: nextMessages.slice(-10),
         })
-      const assistantMessage: ScreeningChatMessage = { ...response, role: 'assistant', content: response.answer.trim() }
+      const answer = response.answer?.trim()
+      if (!answer) throw new Error('Jawaban bersumber belum tersedia.')
+      const assistantMessage: ScreeningChatMessage = { ...response, role: 'assistant', content: answer }
       await saveConversationMessage(conversation.id, assistantMessage)
       if (epoch !== roomEpoch.current) return
       setMessages((current) => [...current, assistantMessage])

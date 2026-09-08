@@ -44,7 +44,10 @@ export function ScreeningHistoryPage() {
   const [filtersOpen, setFiltersOpen] = useState(false)
   const [photo, setPhoto] = useState<{ recordId: string; url: string | null; status: 'idle' | 'loading' | 'ready' | 'unavailable' }>({ recordId: '', url: null, status: 'idle' })
   const [deletingId, setDeletingId] = useState<string | null>(null)
+  const [deleteTarget, setDeleteTarget] = useState<ScreeningHistoryItem | null>(null)
   const [discussionQuestions, setDiscussionQuestions] = useState<string[]>([])
+  const cancelDeleteRef = useRef<HTMLButtonElement>(null)
+  const deleteDialogRef = useRef<HTMLElement>(null)
 
   useEffect(() => { selectedIdRef.current = selectedIdFromUrl }, [selectedIdFromUrl])
 
@@ -126,20 +129,48 @@ export function ScreeningHistoryPage() {
     }
   }, [selectedId, selectedPhotoPath])
 
+  useEffect(() => {
+    if (!deleteTarget) return
+    const focusTimer = window.setTimeout(() => cancelDeleteRef.current?.focus(), 0)
+    function onKeyDown(event: KeyboardEvent) {
+      if (event.key === 'Escape' && !deletingId) setDeleteTarget(null)
+      if (event.key !== 'Tab') return
+      const focusable = [...(deleteDialogRef.current?.querySelectorAll<HTMLElement>(
+        'button:not(:disabled), [href], input:not(:disabled), select:not(:disabled), textarea:not(:disabled), [tabindex]:not([tabindex="-1"])',
+      ) || [])]
+      if (!focusable.length) return
+      const first = focusable[0]
+      const last = focusable[focusable.length - 1]
+      if (event.shiftKey && document.activeElement === first) {
+        event.preventDefault()
+        last.focus()
+      } else if (!event.shiftKey && document.activeElement === last) {
+        event.preventDefault()
+        first.focus()
+      }
+    }
+    window.addEventListener('keydown', onKeyDown)
+    return () => {
+      window.clearTimeout(focusTimer)
+      window.removeEventListener('keydown', onKeyDown)
+    }
+  }, [deleteTarget, deletingId])
+
   function selectRecord(recordId: string) {
     void navigate({ search: { hasil: recordId }, replace: true, resetScroll: false })
   }
 
-  async function removeSelected() {
-    if (!selected || !window.confirm('Hapus hasil ini beserta foto privat dan percakapannya dari akun?')) return
-    setDeletingId(selected.id)
+  async function confirmDelete() {
+    if (!deleteTarget) return
+    setDeletingId(deleteTarget.id)
     setError(null)
     try {
-      await deleteAccountHistory(selected)
-      const remaining = history.filter((record) => record.id !== selected.id)
+      await deleteAccountHistory(deleteTarget)
+      const remaining = history.filter((record) => record.id !== deleteTarget.id)
       setHistory(remaining)
       const nextSelected = remaining[0] || null
       void navigate({ search: { hasil: nextSelected?.id }, replace: true, resetScroll: false })
+      setDeleteTarget(null)
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : 'Hasil belum dapat dihapus.')
     } finally {
@@ -272,7 +303,7 @@ export function ScreeningHistoryPage() {
                   <p className="app-history-detail__note">Hasil ini adalah skrining awal dari satu foto fundus. Persentase menunjukkan kemiripan pola, bukan tingkat keparahan.</p>
                   <div className="app-history-detail__actions">
                     <Link className="app-primary-action" to="/history/$recordId/chat" params={{ recordId: selected.id }}>Mulai diskusi</Link>
-                    <button className="app-text-action app-text-action--danger" type="button" onClick={() => { void removeSelected() }} disabled={deletingId === selected.id}>
+                    <button className="app-text-action app-text-action--danger" type="button" onClick={() => setDeleteTarget(selected)} disabled={deletingId === selected.id}>
                       {deletingId === selected.id ? 'Menghapus…' : 'Hapus hasil'}
                     </button>
                   </div>
@@ -284,6 +315,33 @@ export function ScreeningHistoryPage() {
 
         <Link className="app-history-page__back" to="/account"><BackArrowIcon /> Pengaturan akun</Link>
       </main>
+      {deleteTarget && (
+        <div className="app-dialog-backdrop" role="presentation" onMouseDown={(event) => {
+          if (event.target === event.currentTarget && !deletingId) setDeleteTarget(null)
+        }}>
+          <section ref={deleteDialogRef} className="app-dialog app-dialog--danger" role="alertdialog" aria-modal="true" aria-busy={Boolean(deletingId)} aria-labelledby="delete-history-title" aria-describedby="delete-history-description">
+            <p className="app-kicker">Hapus data tersimpan</p>
+            <h2 id="delete-history-title">Hapus hasil skrining ini?</h2>
+            <p id="delete-history-description">Tindakan ini permanen dan tidak dapat dibatalkan.</p>
+            <div className="app-dialog__context" aria-label="Hasil yang akan dihapus">
+              <strong>{deleteTarget.top_prediction_label}</strong>
+              <span>{formatDate(deleteTarget.created_at)}</span>
+            </div>
+            <p className="app-dialog__impact-label">Yang akan dihapus dari akun:</p>
+            <ul className="app-dialog__impact">
+              <li>Hasil skrining dan ringkasannya</li>
+              {deleteTarget.photo_path && <li>Foto fundus privat</li>}
+              <li>Percakapan yang terkait dengan hasil ini</li>
+            </ul>
+            <div className="app-dialog__actions app-dialog__actions--danger">
+              <button ref={cancelDeleteRef} className="app-secondary-action" type="button" onClick={() => setDeleteTarget(null)} disabled={Boolean(deletingId)}>Batal</button>
+              <button className="app-danger-action" type="button" onClick={() => { void confirmDelete() }} disabled={Boolean(deletingId)}>
+                {deletingId ? 'Menghapus…' : 'Hapus permanen'}
+              </button>
+            </div>
+          </section>
+        </div>
+      )}
       <SiteFooter />
     </div>
   )

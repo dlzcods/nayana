@@ -80,6 +80,13 @@ export type ChatCitation = {
   sections?: string[]
   url: string
   excerpt: string
+  // Ordered to match each visible citation marker in the assistant answer.
+  // Older saved conversations may not have this field.
+  claims?: Array<{
+    heading: string
+    excerpt: string
+    supporting_quotes?: string[]
+  }>
   corpus_version: string
   source_updated_at?: string | null
   fetched_at: string
@@ -100,7 +107,9 @@ export type ScreeningChatMessage = GroundingMetadata & {
 export type SuggestedQuestion = GroundingMetadata & {
   id: string
   question: string
-  answer: string
+  // Atomic citation mode returns navigation prompts only. Legacy cached packs
+  // may still include a fully grounded answer for backward compatibility.
+  answer?: string | null
 }
 
 const configuredApiBase = import.meta.env.VITE_NAYANA_API_BASE_URL?.trim()

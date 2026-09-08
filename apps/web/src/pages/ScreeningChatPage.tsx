@@ -175,7 +175,7 @@ export function ScreeningChatPage() {
     setIsSending(true)
     shouldFollowMessages.current = true
     try {
-      if (cachedAnswer) {
+      if (cachedAnswer?.answer) {
         const completed: ScreeningChatMessage[] = [...nextMessages, { ...cachedAnswer, role: 'assistant', content: cachedAnswer.answer.trim() }]
         setMessages(completed)
         setFailedQuestion(null)

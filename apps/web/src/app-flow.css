@@ -2323,12 +2323,50 @@
 .app-dialog__actions .app-primary-action,
 .app-dialog__actions .app-text-action { margin: 0; }
 
+.app-dialog--danger { max-width: 540px; }
+.app-dialog__context {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 16px;
+  margin-top: 24px;
+  padding: 14px 0;
+  border-block: 1px solid var(--optic-line);
+  color: var(--optic-ink);
+}
+.app-dialog__context strong { font-size: 15px; font-weight: 600; }
+.app-dialog__context span { color: #686970; font-size: 13px; }
+.app-dialog__impact-label { margin: 22px 0 0; color: var(--optic-ink); font-size: 13px; font-weight: 600; }
+.app-dialog__impact { margin: 10px 0 0; padding: 0; list-style: none; color: #5f6066; font-size: 14px; line-height: 1.55; }
+.app-dialog__impact li { position: relative; padding: 5px 0 5px 20px; }
+.app-dialog__impact li::before { position: absolute; left: 1px; color: #a63f34; content: '•'; }
+.app-dialog__actions--danger { justify-content: flex-end; }
+.app-dialog__actions--danger .app-secondary-action { width: auto; min-height: 48px; padding-inline: 20px; }
+.app-danger-action {
+  min-height: 48px;
+  padding: 0 22px;
+  border: 1px solid #a63f34;
+  border-radius: 999px;
+  background: #a63f34;
+  color: #fff;
+  font: inherit;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+}
+.app-danger-action:hover,
+.app-danger-action:focus-visible { background: #8d3027; border-color: #8d3027; }
+.app-danger-action:disabled { cursor: wait; opacity: .65; }
+
 @media (max-width: 620px) {
   .app-dialog-backdrop { padding: 16px; }
   .app-dialog__actions { align-items: stretch; flex-direction: column; gap: 14px; }
   .app-dialog__actions .app-primary-action { width: 100%; }
+  .app-dialog__actions--danger { flex-direction: column-reverse; }
+  .app-dialog__actions--danger .app-secondary-action,
+  .app-danger-action { width: 100%; }
 }
-/* NEI citations stay beside their claim: opening a source never scrolls the room. */
+/* A source is a reading aid, not a side popover that obstructs the paragraph. */
 .chat-source-popover {
   position: relative;
   display: inline-flex;
@@ -2359,27 +2397,118 @@
   background: #e6ebff;
 }
 
+.chat-source-ref[aria-expanded="true"] {
+  background: #405ed1;
+  color: #fff;
+}
+
 .chat-source-ref:focus-visible,
 .chat-source-popover__card button:focus-visible,
-.chat-source-popover__card a:focus-visible {
+.chat-source-popover__card a:focus-visible,
+.chat-sources__toggle:focus-visible,
+.chat-sources__entry a:focus-visible {
   outline: 2px solid #405ed1;
   outline-offset: 3px;
 }
 
-.chat-sources__label {
+.chat-sources {
   margin: 0.65rem 0 0;
+}
+
+.chat-sources__toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.36rem;
+  padding: 0;
+  border: 0;
+  background: transparent;
   color: #606570;
+  font: inherit;
   font-size: 0.78rem;
   line-height: 1.5;
+  text-align: start;
+  cursor: pointer;
+}
+
+.chat-sources__toggle:hover { color: #405ed1; }
+
+.chat-sources__chevron {
+  color: #405ed1;
+  font-size: 1rem;
+  line-height: 1;
+  transition: transform 180ms ease;
+}
+
+.chat-sources__toggle[aria-expanded="true"] .chat-sources__chevron { transform: rotate(180deg); }
+
+.chat-sources__list {
+  display: grid;
+  gap: 0.6rem;
+  margin: 0.55rem 0 0;
+  padding: 0.7rem;
+  border: 1px solid #d8dff5;
+  border-radius: 10px;
+  background: rgba(248, 249, 255, .78);
+  list-style: none;
+  animation: chat-source-list-in 180ms ease-out both;
+}
+
+.chat-sources__list li {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.55rem;
+}
+
+.chat-sources__number {
+  flex: 0 0 auto;
+  padding: 0.16rem 0.32rem;
+  border-radius: 0.28rem;
+  background: #e6ebff;
+  color: #405ed1;
+  font-size: 0.7rem;
+  font-weight: 700;
+  line-height: 1.2;
+}
+
+.chat-sources__number sup { margin-left: 1px; font-size: .86em; }
+
+.chat-sources__entry {
+  display: grid;
+  gap: 0.14rem;
+  min-width: 0;
+  color: #606570;
+  font-size: 0.76rem;
+  line-height: 1.45;
+}
+
+.chat-sources__entry a {
+  width: fit-content;
+  max-width: 100%;
+  overflow-wrap: anywhere;
+  color: #405ed1;
+  font-weight: 600;
+  text-decoration: underline;
+  text-underline-offset: 0.18em;
+}
+
+@keyframes chat-source-list-in {
+  from { opacity: 0; transform: translateY(-4px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .chat-sources__chevron, .chat-sources__list { transition: none; animation: none; }
 }
 
 .chat-source-popover__card {
-  position: absolute;
-  z-index: 10;
-  left: 0;
-  bottom: calc(100% + 10px);
-  width: min(350px, calc(100vw - 32px));
-  padding: 14px;
+  position: fixed;
+  z-index: 60;
+  bottom: calc(84px + env(safe-area-inset-bottom));
+  left: 50%;
+  width: min(540px, calc(100vw - 48px));
+  max-height: min(58dvh, 560px);
+  transform: translateX(-50%);
+  padding: 16px;
   border: 1px solid #cfd8fa;
   border-radius: 12px;
   background: #f8f9ff;
@@ -2388,6 +2517,15 @@
   overflow-wrap: anywhere;
   font-size: 13px;
   line-height: 1.55;
+  overflow-y: auto;
+}
+
+.chat-source-popover__backdrop {
+  position: fixed;
+  z-index: 59;
+  inset: 0;
+  border: 0;
+  background: transparent;
 }
 
 .chat-source-popover__head {
@@ -2415,6 +2553,13 @@
   font-size: 12px;
 }
 
+.chat-source-popover__evidence-label {
+  margin: 12px 0 6px;
+  color: #626a7d;
+  font-size: 12px;
+  font-weight: 600;
+}
+
 .chat-source-popover__card blockquote {
   margin: 10px 0;
   padding-inline-start: 0.8rem;
@@ -2425,6 +2570,34 @@
   line-height: 1.6;
 }
 
+.chat-source-popover__card blockquote.chat-source-popover__quote {
+  margin: 0 0 9px;
+  padding: 0.68rem 0.8rem;
+  border-inline-start: 4px solid #405ed1;
+  background: #eaf0ff;
+  color: #303c68;
+  font-weight: 500;
+  animation: chat-source-highlight 420ms ease-out both;
+}
+
+/* Older saved chats have an article-level reference only. Do not imply that
+   their preview is the exact evidence for a particular rendered claim. */
+.chat-source-popover__card blockquote.chat-source-popover__quote--legacy {
+  border-inline-start-color: #405ed1;
+  background: #eaf0ff;
+  color: #303c68;
+  animation: chat-source-highlight 420ms ease-out both;
+}
+
+@keyframes chat-source-highlight {
+  from { opacity: 0; background: #d5e0ff; transform: translateY(4px); }
+  to { opacity: 1; background: #eaf0ff; transform: translateY(0); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .chat-source-popover__card blockquote.chat-source-popover__quote { animation: none; }
+}
+
 .chat-source-popover__card a {
   color: #405ed1;
   text-decoration: underline;
@@ -2433,17 +2606,9 @@
 
 @media (max-width: 920px) {
   .chat-source-popover__card {
-    /* A card anchored inside the scrollable message pane can be clipped behind
-       the context header on tablet. At this breakpoint it is a viewport sheet. */
-    position: fixed;
-    z-index: 60;
-    right: auto;
-    bottom: calc(76px + env(safe-area-inset-bottom));
-    left: 50%;
     width: min(500px, calc(100vw - 48px));
     max-height: min(64dvh, 560px);
-    transform: translateX(-50%);
-    overflow-y: auto;
+    bottom: calc(76px + env(safe-area-inset-bottom));
   }
 
   .chat-source-popover__card blockquote { max-height: 13em; }
@@ -2455,7 +2620,7 @@
     bottom: calc(72px + env(safe-area-inset-bottom));
     left: 16px;
     width: auto;
-    max-height: min(62dvh, 500px);
+    max-height: min(66dvh, 540px);
     transform: none;
   }
 }
