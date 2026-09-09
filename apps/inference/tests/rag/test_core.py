@@ -9,6 +9,8 @@ from rag.citations import (ANSWER_JSON_SCHEMA, EVIDENCE_REFERENCE_MODE, as_genai
 from rag.common import sources
 from rag.retrieve import TinyBM25, allowed_source_ids, contextual_query
 from rag.service import answer_question, starter_questions
+from rag.telemetry import retrieval_metadata
+from rag.providers import selected_rag_provider
 
 
 def row():
@@ -26,9 +28,30 @@ def test_allowlist_exactly_five():
 
 def test_model_evidence_payload_has_no_server_ids_or_aliases():
     packet = evidence_payload([row()])
-    assert set(packet[0]) == {"title", "heading", "text", "url"}
+    assert set(packet[0]) == {"title", "heading", "text"}
     assert "cataracts-overview" not in json.dumps(packet)
     assert "E1" not in json.dumps(packet)
+
+
+def test_retrieval_metadata_keeps_operational_counts_not_prompt_text():
+    metadata = retrieval_metadata(question="rahasia-pertanyaan", query="query-rahasia",
+                                  payload="payload-rahasia", evidence=[row()], memory_intent="overview",
+                                  instruction="instruksi-rahasia")
+    assert metadata["evidence_count"] == 1
+    assert metadata["source_ids"] == ["cataracts"]
+    assert metadata["retrieval_candidates"][0]["source_id"] == "cataracts"
+    assert "rahasia" not in json.dumps(metadata)
+
+
+def test_rag_provider_switch_defaults_to_gemini_and_openrouter_is_explicit():
+    gemini = selected_rag_provider({"GEMINI_API_KEY": "test-key"})
+    openrouter = selected_rag_provider({
+        "NAYANA_RAG_PROVIDER": "openrouter", "OPENROUTER_API_KEY": "router-key",
+    })
+    assert (gemini.name, gemini.model, gemini.api_key) == ("gemini", "gemma-4-31b-it", "test-key")
+    assert (openrouter.name, openrouter.model, openrouter.api_key) == (
+        "openrouter", "google/gemma-4-26b-a4b-it", "router-key",
+    )
 
 
 def test_schema_is_single_answer_field():
@@ -122,10 +145,14 @@ def test_answer_uses_one_generation_then_server_attribution():
         calls.append((payload, schema))
         return json.dumps({"answer": "Katarak adalah area keruh pada lensa mata."})
     with patch("rag.service.get_retriever", return_value=FakeRetriever()):
-        response = answer_question("Apa itu katarak?", [], "cataract", {}, complete)
+        response = answer_question("Apa itu katarak?", [], "cataract",
+                                   {"screening_context": {"categories": []}}, complete)
     assert len(calls) == 1
     assert "cataracts-overview" not in calls[0][0]
     assert calls[0][1] == ANSWER_JSON_SCHEMA
+    sent = json.loads(calls[0][0])
+    assert sent["screening_context"] == {"categories": []}
+    assert "screening_context" not in sent["screening_context"]
     assert response.source_status == "grounded"
 
 

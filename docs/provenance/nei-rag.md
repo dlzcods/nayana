@@ -70,6 +70,14 @@ provider failure.
 If the available evidence does not answer a question, the API returns
 `insufficient_evidence` without citations.
 
+Each RAG call emits privacy-safe operational metadata for incident comparison:
+a short trace ID, question/query/payload character counts, evidence count and
+character count, selected source IDs/headings and E5/BM25/RRF ranks, topic guard,
+memory intent, model configuration, provider status, and stream counts. It never logs question text,
+evidence text, URLs, screening IDs, photos, or model output. This lets a failed
+request be compared with a successful request without creating a second store of
+medical conversation data.
+
 Suggested-question chips are deterministic navigation prompts per screening
 topic, not cached medical answers. Selecting one sends exactly one normal
 grounded chat request. This keeps the first interaction responsive without

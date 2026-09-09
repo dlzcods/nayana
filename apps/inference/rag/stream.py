@@ -10,9 +10,13 @@ class ProviderStreamIncomplete(ValueError):
     provider output from logs.
     """
 
-    def __init__(self, reason: str | None, response_characters: int) -> None:
+    def __init__(self, reason: str | None, response_characters: int, response_count: int,
+                 text_part_count: int, thought_part_count: int) -> None:
         self.reason = reason or "missing"
         self.response_characters = response_characters
+        self.response_count = response_count
+        self.text_part_count = text_part_count
+        self.thought_part_count = thought_part_count
         super().__init__(f"Incomplete provider response: finish_reason={self.reason}")
 
 
@@ -22,6 +26,8 @@ class CollectedProviderText:
 
     text_parts: tuple[str, ...]
     thought_part_count: int
+    response_count: int
+    text_part_count: int
 
     @property
     def text(self) -> str:
@@ -31,8 +37,11 @@ class CollectedProviderText:
 def collect_json_stream(stream) -> CollectedProviderText:
     parts: list[str] = []
     thought_part_count = 0
+    response_count = 0
+    text_part_count = 0
     reason = None
     for response in stream:
+        response_count += 1
         candidates = getattr(response, "candidates", None) or []
         if len(candidates) > 1:
             raise ValueError("Expected one response candidate")
@@ -46,15 +55,18 @@ def collect_json_stream(stream) -> CollectedProviderText:
                     thought_part_count += 1
                 elif getattr(part, "text", None):
                     parts.append(part.text)
+                    text_part_count += 1
                     text_in_candidate = True
         # Never fall back to response.text when a candidate exists. Some
         # providers expose thought text through that convenience property even
         # when candidate parts are correctly marked as thoughts.
         if not candidates and getattr(response, "text", None):
             parts.append(response.text)
+            text_part_count += 1
     if reason != "STOP":
-        raise ProviderStreamIncomplete(reason, len("".join(parts)))
+        raise ProviderStreamIncomplete(reason, len("".join(parts)), response_count,
+                                       text_part_count, thought_part_count)
     text = "".join(parts)
     if not text.strip():
         raise ValueError("Provider returned no answer text")
-    return CollectedProviderText(tuple(parts), thought_part_count)
+    return CollectedProviderText(tuple(parts), thought_part_count, response_count, text_part_count)

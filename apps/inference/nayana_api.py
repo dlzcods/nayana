@@ -460,56 +460,92 @@ def rag_enabled() -> bool:
 
 def rag_completion(instruction: str, payload: str, response_schema: dict | None = None) -> str:
     from rag.stream import ProviderStreamIncomplete, collect_json_stream
-    from google import genai
-    from google.genai import types
-    from rag.citations import as_genai_schema
-    key = os.getenv("GEMINI_API_KEY")
-    if not key:
+    from rag.telemetry import current_trace
+    from rag.providers import (ProviderRequestError, openrouter_completion,
+                               selected_rag_provider)
+    provider = selected_rag_provider()
+    if not provider.api_key:
         raise HTTPException(status_code=503, detail="Percakapan hasil belum diaktifkan.")
-    client = genai.Client(api_key=key)
-    # RAG experiment: keep this isolated from summary/suggestion model settings.
-    model = "gemma-4-31b-it"
     started_at = time.monotonic()
+    trace = current_trace()
+    trace_id = trace["trace_id"]
+    client = None
     try:
-        response_stream = client.models.generate_content_stream(
-            model=model,
-            contents=payload,
-            config=types.GenerateContentConfig(
-                thinking_config=types.ThinkingConfig(thinking_level="MINIMAL", include_thoughts=False),
-                http_options=types.HttpOptions(timeout=RAG_PROVIDER_TIMEOUT_MS),
-                # Diagnostic ceiling: determine whether Gemma can ever finish
-                # the one-field JSON response before we change the contract.
-                max_output_tokens=15000,
-                temperature=0.2,
-                response_mime_type="application/json",
-                response_schema=as_genai_schema(response_schema, types) if response_schema is not None else None,
-                system_instruction=instruction,
-            ),
-        )
-        # Structured-output streams are valid partial JSON strings. Join every
-        # non-thought chunk before the server parser sees it; never parse an
-        # arbitrary mid-stream fragment as a complete response.
-        collected = collect_json_stream(response_stream)
+        if provider.name == "openrouter":
+            collected = openrouter_completion(
+                provider=provider, instruction=instruction, payload=payload,
+                timeout_ms=RAG_PROVIDER_TIMEOUT_MS, max_output_tokens=15000,
+            )
+        else:
+            from google import genai
+            from google.genai import types
+            from rag.citations import as_genai_schema
+            client = genai.Client(api_key=provider.api_key)
+            response_stream = client.models.generate_content_stream(
+                model=provider.model,
+                contents=payload,
+                config=types.GenerateContentConfig(
+                    thinking_config=types.ThinkingConfig(thinking_level="MINIMAL", include_thoughts=False),
+                    http_options=types.HttpOptions(timeout=RAG_PROVIDER_TIMEOUT_MS),
+                    max_output_tokens=15000,
+                    temperature=0.2,
+                    response_mime_type="application/json",
+                    response_schema=as_genai_schema(response_schema, types) if response_schema is not None else None,
+                    system_instruction=instruction,
+                ),
+            )
+            # Structured-output streams are valid partial JSON strings. Join every
+            # non-thought chunk before the server parser sees it; never parse an
+            # arbitrary mid-stream fragment as a complete response.
+            collected = collect_json_stream(response_stream)
         response_text = collected.text
-        logger.info(
-            "NEI provider completed model=%s elapsed_seconds=%.2f response_characters=%d",
-            model, time.monotonic() - started_at, len(response_text),
+        # See the paired retrieval trace even when the provider succeeds; the
+        # default Modal log view otherwise hides INFO-level diagnostics.
+        logger.warning(
+            "NEI provider completed trace_id=%s provider=%s model=%s elapsed_seconds=%.2f response_characters=%d "
+            "stream_responses=%d text_parts=%d thought_parts=%d payload_characters=%s evidence_count=%s "
+            "evidence_characters=%s source_ids=%s topic_guard=%s memory_intent=%s output_cap=%d "
+            "thinking_level=minimal schema_enabled=%s timeout_ms=%d sdk_retry_policy=default provider_route=%s usage=%s",
+            trace_id, provider.name, provider.model, time.monotonic() - started_at, len(response_text), collected.response_count,
+            collected.text_part_count, collected.thought_part_count, trace.get("payload_characters"),
+            trace.get("evidence_count"), trace.get("evidence_characters"), trace.get("source_ids"),
+            trace.get("topic_guard"), trace.get("memory_intent"), 15000, response_schema is not None,
+            RAG_PROVIDER_TIMEOUT_MS, getattr(collected, "route", None), getattr(collected, "usage", None),
         )
         return response_text
     except ProviderStreamIncomplete as error:
         logger.warning(
-            "NEI provider stopped early model=%s elapsed_seconds=%.2f finish_reason=%s response_characters=%d",
-            model, time.monotonic() - started_at, error.reason, error.response_characters,
+            "NEI provider stopped early trace_id=%s provider=%s model=%s elapsed_seconds=%.2f finish_reason=%s "
+            "response_characters=%d stream_responses=%d text_parts=%d thought_parts=%d payload_characters=%s "
+            "evidence_count=%s evidence_characters=%s source_ids=%s topic_guard=%s memory_intent=%s "
+            "output_cap=%d thinking_level=minimal schema_enabled=%s timeout_ms=%d sdk_retry_policy=default",
+            trace_id, provider.name, provider.model, time.monotonic() - started_at, error.reason, error.response_characters,
+            error.response_count, error.text_part_count, error.thought_part_count, trace.get("payload_characters"),
+            trace.get("evidence_count"), trace.get("evidence_characters"), trace.get("source_ids"),
+            trace.get("topic_guard"), trace.get("memory_intent"), 15000, response_schema is not None,
+            RAG_PROVIDER_TIMEOUT_MS,
         )
         raise
     except Exception as error:
+        provider_response = getattr(error, "response_json", None)
+        provider_error = provider_response.get("error", {}) if isinstance(provider_response, dict) else {}
+        provider_status_code = getattr(error, "code", None) or getattr(error, "status_code", None) or provider_error.get("code")
+        provider_status = provider_error.get("status") or getattr(error, "status", None) or "unknown"
         logger.warning(
-            "NEI provider request failed model=%s elapsed_seconds=%.2f error_type=%s",
-            model, time.monotonic() - started_at, type(error).__name__,
+            "NEI provider request failed trace_id=%s provider=%s model=%s elapsed_seconds=%.2f error_type=%s "
+            "provider_status_code=%s provider_status=%s failed_before_first_stream_chunk=true "
+            "payload_characters=%s evidence_count=%s evidence_characters=%s source_ids=%s topic_guard=%s "
+            "memory_intent=%s output_cap=%d thinking_level=minimal schema_enabled=%s timeout_ms=%d "
+            "sdk_retry_policy=default",
+            trace_id, provider.name, provider.model, time.monotonic() - started_at, type(error).__name__, provider_status_code,
+            provider_status, trace.get("payload_characters"), trace.get("evidence_count"),
+            trace.get("evidence_characters"), trace.get("source_ids"), trace.get("topic_guard"),
+            trace.get("memory_intent"), 15000, response_schema is not None, RAG_PROVIDER_TIMEOUT_MS,
         )
         raise
     finally:
-        client.close()
+        if client is not None:
+            client.close()
 
 
 def response_text_without_thoughts(response: object) -> str:
@@ -940,8 +976,18 @@ def build_demo_result(case_id: str, screening_id: str) -> ScreeningResult:
 
 @app.get("/v1/health")
 def health_check():
+    from rag.providers import selected_rag_provider
     rag_version = os.getenv("NAYANA_RAG_VERSION", "").strip()
     evidence_reference_mode = "server_attribution" if rag_version else None
+    try:
+        rag_provider = selected_rag_provider()
+        provider_status = {
+            "provider": rag_provider.name,
+            "provider_model": rag_provider.model,
+            "provider_key_configured": bool(rag_provider.api_key),
+        }
+    except ValueError as error:
+        provider_status = {"provider": "invalid", "provider_error": str(error), "provider_key_configured": False}
     return {
         "status": "ready" if MODEL_PATH.is_dir() else "needs_model",
         "model_version": MODEL_VERSION,
@@ -957,6 +1003,7 @@ def health_check():
             "citation_mode": "sentence",
             "evidence_reference_mode": evidence_reference_mode,
             "ready": bool(rag_version),
+            **provider_status,
         },
     }
 

@@ -117,6 +117,27 @@ berada di konstanta kode `RAG_PROVIDER_TIMEOUT_MS`, bukan secret atau variable
 Modal. Nilai tersebut mencegah client memotong generation aktif di detik ke-120;
 ia bukan jaminan bahwa provider akan selalu menyelesaikan respons lebih cepat.
 
+## Uji provider RAG alternatif
+
+Default RAG tetap memakai Gemini. Untuk eksperimen routing tanpa mengubah
+retrieval, evidence, atau sitasi server, secret Modal `nayana` dapat diberi:
+
+```text
+NAYANA_RAG_PROVIDER=openrouter
+OPENROUTER_API_KEY=<key rahasia OpenRouter>
+```
+
+Dengan switch ini, RAG memakai `google/gemma-4-26b-a4b-it` melalui endpoint Chat
+Completions OpenRouter. Tidak ada key yang ditulis ke kode atau log. Untuk kembali
+ke konfigurasi normal, set `NAYANA_RAG_PROVIDER=gemini` atau hapus variabel itu;
+`GEMINI_API_KEY` tetap dipakai untuk provider Gemini serta endpoint non-RAG lain.
+
+Model tiap jalur dapat dioverride khusus untuk eksperimen melalui
+`NAYANA_RAG_GEMINI_MODEL` dan `NAYANA_RAG_OPENROUTER_MODEL`. Gunakan model yang
+sama pada kedua jalur hanya bila memang tersedia di kedua provider; default Gemini
+saat ini `gemma-4-31b-it`, sedangkan model OpenRouter yang diuji adalah
+`google/gemma-4-26b-a4b-it`.
+
 ## Prototipe Gradio sumber
 
 Dari root monorepo, unduh model jika folder `model/` belum tersedia:

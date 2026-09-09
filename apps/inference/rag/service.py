@@ -8,6 +8,7 @@ from collections.abc import Callable
 from .citations import (ANSWER_JSON_SCHEMA, GROUNDING_INSTRUCTION, GroundedResponse,
                         attribute_answer, evidence_payload, parse_answer)
 from .retrieve import contextual_query, get_retriever
+from .telemetry import retrieval_metadata, scoped_trace
 
 
 STARTER_QUESTIONS = {
@@ -75,10 +76,24 @@ def answer_question(question: str, history: list[dict], topic: str, context: dic
         )
     # History has already been reduced to one previous user question for
     # retrieval. Never replay browser chat bubbles to the provider.
-    payload = {"question": question, "screening_context": context,
+    # build_summary_context already owns this envelope. Flatten it before the
+    # provider sees it so the documented `screening_context.categories` path is
+    # real rather than accidentally becoming `screening_context.screening_context`.
+    screening_context = context.get("screening_context", context)
+    payload = {"question": question, "screening_context": screening_context,
                "evidence": evidence_payload(evidence)}
+    payload_text = json.dumps(payload, ensure_ascii=False)
+    metadata = retrieval_metadata(question=question, query=query, payload=payload_text,
+                                  evidence=evidence, memory_intent=memory_intent,
+                                  instruction=GROUNDING_INSTRUCTION)
+    import logging
+    # Modal's default log view suppresses INFO records. Keep this operational
+    # trace at WARNING until the audit is complete so successful 200 requests
+    # are observable alongside failures.
+    logging.getLogger(__name__).warning("NEI RAG retrieval trace=%s", metadata)
     # One provider call: prose only. Citation identity, markers, and exact
     # quote selection are server-owned after the model returns its answer.
-    text = complete(GROUNDING_INSTRUCTION, json.dumps(payload, ensure_ascii=False), ANSWER_JSON_SCHEMA)
+    with scoped_trace(metadata):
+        text = complete(GROUNDING_INSTRUCTION, payload_text, ANSWER_JSON_SCHEMA)
     return attribute_answer(parse_answer(text), evidence, retriever.version,
                             encoder=getattr(retriever, "encoder", None))

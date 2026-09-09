@@ -112,7 +112,7 @@ def parse_answer(text: str) -> str:
 
 def evidence_payload(rows: list[dict]) -> list[dict]:
     """Give the model content only; server provenance stays private."""
-    return [{key: row[key] for key in ("title", "heading", "text", "url")} for row in rows]
+    return [{key: row[key] for key in ("title", "heading", "text")} for row in rows]
 
 
 def insufficient(version: str | None) -> GroundedResponse:

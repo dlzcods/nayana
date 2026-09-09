@@ -96,6 +96,31 @@ function articleCitations(citations: ChatCitation[]): ArticleCitation[] {
   return [...byUrl.values()]
 }
 
+function sourceRelevance(article: ArticleCitation): string {
+  const labels = [article.heading, ...article.sections].join(' ').toLowerCase()
+  if (/treatment|treat|injection|laser|surgery/.test(labels)) {
+    return 'Menjelaskan pilihan penanganan dan kapan pemeriksaan lanjutan diperlukan.'
+  }
+  if (/risk|at risk/.test(labels)) {
+    return 'Menjelaskan faktor yang dapat meningkatkan risiko kondisi mata ini.'
+  }
+  if (/symptom|sign/.test(labels)) {
+    return 'Menjelaskan gejala yang dibahas dalam jawaban.'
+  }
+  if (/check|exam|test|diagnos/.test(labels)) {
+    return 'Menjelaskan pemeriksaan mata yang berkaitan dengan jawaban.'
+  }
+  if (/prevent|protect|healthy/.test(labels)) {
+    return 'Menjelaskan langkah menjaga kesehatan mata dan mengurangi risiko.'
+  }
+  if (/what is|what are|overview|at a glance/.test(labels)) {
+    return 'Memberi penjelasan dasar untuk konteks jawaban ini.'
+  }
+  return article.claims.length
+    ? 'Menjadi rujukan untuk bagian jawaban yang ditandai di atas.'
+    : 'Memberi konteks pendukung untuk jawaban ini.'
+}
+
 export function ChatSources({ text, citations = [], renderText, onCitationOpen }: {
   text: string
   citations?: ChatCitation[]
@@ -171,16 +196,23 @@ export function ChatSources({ text, citations = [], renderText, onCitationOpen }
     {articles.length > 0 && <section className="chat-sources" aria-label="Referensi National Eye Institute">
       <button type="button" className="chat-sources__toggle" aria-expanded={sourcesExpanded} aria-controls={sourceListId}
         onClick={() => setSourcesExpanded((expanded) => !expanded)}>
-        <span>Referensi: National Eye Institute · {articles.length} artikel</span>
+        <span className="chat-sources__toggle-copy">
+          <span className="chat-sources__toggle-kicker">Bukti untuk jawaban ini</span>
+          <span className="chat-sources__toggle-title">{articles.length} sumber National Eye Institute</span>
+        </span>
         <span className="chat-sources__chevron" aria-hidden="true">⌄</span>
       </button>
       {sourcesExpanded && <ul className="chat-sources__list" id={sourceListId}>
         {articles.map((article) => <li key={article.articleId}>
-          <span className="chat-sources__number">NEI<sup>{article.articleId}</sup></span>
-          <span className="chat-sources__entry">
-            <a href={article.url} target="_blank" rel="noopener noreferrer">{article.title}</a>
-            <span>Bagian relevan: {article.sections.join(' · ')}</span>
-          </span>
+          <a className="chat-sources__link" href={article.url} target="_blank" rel="noopener noreferrer"
+            aria-label={`Buka artikel NEI: ${article.title}`}>
+            <span className="chat-sources__number">NEI<sup>{article.articleId}</sup></span>
+            <span className="chat-sources__entry">
+              <span className="chat-sources__title">{article.title}</span>
+              <span className="chat-sources__relevance">{sourceRelevance(article)}</span>
+            </span>
+            <span className="chat-sources__external" aria-hidden="true">↗</span>
+          </a>
         </li>)}
       </ul>}
     </section>}

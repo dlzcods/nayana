@@ -2406,7 +2406,7 @@
 .chat-source-popover__card button:focus-visible,
 .chat-source-popover__card a:focus-visible,
 .chat-sources__toggle:focus-visible,
-.chat-sources__entry a:focus-visible {
+.chat-sources__link:focus-visible {
   outline: 2px solid #405ed1;
   outline-offset: 3px;
 }
@@ -2416,21 +2416,41 @@
 }
 
 .chat-sources__toggle {
-  display: inline-flex;
+  display: flex;
   align-items: center;
-  gap: 0.36rem;
-  padding: 0;
+  justify-content: space-between;
+  gap: 0.8rem;
+  width: 100%;
+  min-height: 48px;
+  padding: 0.72rem 0 0.58rem;
   border: 0;
+  border-top: 1px solid #d5d6d8;
   background: transparent;
-  color: #606570;
+  color: #4f535e;
   font: inherit;
-  font-size: 0.78rem;
-  line-height: 1.5;
   text-align: start;
   cursor: pointer;
 }
 
-.chat-sources__toggle:hover { color: #405ed1; }
+.chat-sources__toggle-copy {
+  display: grid;
+  gap: 0.08rem;
+}
+
+.chat-sources__toggle-kicker {
+  color: #697080;
+  font-size: 0.69rem;
+  line-height: 1.4;
+}
+
+.chat-sources__toggle-title {
+  color: inherit;
+  font-size: 0.82rem;
+  font-weight: 650;
+  line-height: 1.4;
+}
+
+.chat-sources__toggle:hover .chat-sources__toggle-title { color: #405ed1; }
 
 .chat-sources__chevron {
   color: #405ed1;
@@ -2443,20 +2463,29 @@
 
 .chat-sources__list {
   display: grid;
-  gap: 0.6rem;
-  margin: 0.55rem 0 0;
-  padding: 0.7rem;
-  border: 1px solid #d8dff5;
-  border-radius: 10px;
-  background: rgba(248, 249, 255, .78);
+  margin: 0;
+  padding: 0;
   list-style: none;
   animation: chat-source-list-in 180ms ease-out both;
 }
 
-.chat-sources__list li {
-  display: flex;
-  align-items: flex-start;
-  gap: 0.55rem;
+.chat-sources__list li + li { border-top: 1px solid #d5d6d8; }
+
+.chat-sources__link {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: start;
+  gap: 0.14rem 0.6rem;
+  width: 100%;
+  padding: 0.72rem 0;
+  color: inherit;
+  text-decoration: none;
+}
+
+.chat-sources__link:hover .chat-sources__title {
+  color: #405ed1;
+  text-decoration: underline;
+  text-underline-offset: 0.18em;
 }
 
 .chat-sources__number {
@@ -2481,14 +2510,19 @@
   line-height: 1.45;
 }
 
-.chat-sources__entry a {
-  width: fit-content;
-  max-width: 100%;
-  overflow-wrap: anywhere;
+.chat-sources__title {
   color: #405ed1;
-  font-weight: 600;
-  text-decoration: underline;
-  text-underline-offset: 0.18em;
+  font-weight: 650;
+  overflow-wrap: anywhere;
+}
+
+.chat-sources__relevance { color: #606570; }
+
+.chat-sources__external {
+  color: #405ed1;
+  font-size: 1rem;
+  line-height: 1;
+  padding-top: 0.08rem;
 }
 
 @keyframes chat-source-list-in {
