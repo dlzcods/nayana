@@ -46,30 +46,42 @@ the E5 `passage:` prefix and questions use `query:`.
 
 The remote builder pins `intfloat/multilingual-e5-small` to its resolved Hugging
 Face revision, embeds to 384 dimensions, normalizes vectors, and writes a FAISS
-`IndexFlatIP`. Encoder, index, and chunk hashes are verified when loaded. A
-candidate version is never enabled automatically.
+`IndexFlatIP`. At serving time, the same immutable `chunks.json` is also loaded
+into a tiny in-memory BM25 index. E5 and BM25 ranks are fused with reciprocal
+rank fusion (RRF); their raw scores are never mixed. Encoder, index, and chunk
+hashes are verified when loaded. A candidate version is never enabled
+automatically.
 
 ## Grounding and safety contract
 
 Gemma receives only retrieved snippets, bounded conversation context, and the
-non-medical screening context. Medical paragraphs must identify retrieved chunk
-IDs. The server—not Gemma—attaches URLs, excerpts, and numbered references. If
-the available evidence does not answer a question, the API returns
-`insufficient_evidence` without citations. It also rejects model-supplied URLs,
-unknown source IDs, citation markers, personalized doses, and unsupported local
-facts such as current treatment prices.
+non-medical screening context. Its schema has one field, `answer`; opaque chunk
+IDs, aliases, quote text, and markers never enter its request or response
+contract. When a question names cataract, diabetic retinopathy, or glaucoma,
+the retriever permits only chunks belonging to that condition; general eye-health
+questions remain free to search all five approved articles. After generation,
+the server compares every display sentence against short, verbatim candidate
+spans from the retrieved NEI chunks using multilingual E5. Candidates are
+compared once per article, so overlapping chunks from one article cannot erase a
+valid marker. The server alone owns URLs, excerpts, numbered markers, and
+quote-card text. If a sentence has no conservative semantic match it receives no
+exact-quote marker; this is an honest absence of claim-level proof, not a
+provider failure.
+If the available evidence does not answer a question, the API returns
+`insufficient_evidence` without citations.
 
 Suggested-question chips are deterministic navigation prompts per screening
 topic, not cached medical answers. Selecting one sends exactly one normal
 grounded chat request. This keeps the first interaction responsive without
 manufacturing a clinical answer before the user asks it.
 
-The active citation contract is paragraph-level: the model can select only from
-the retrieved source IDs, while the server owns marker placement, URLs, excerpts,
-and citation-card metadata. The renderer never receives an opaque source ID as
-chat text; bracketed IDs are stripped and any remaining raw ID rejects the model
-output. This preserves readable source cards without treating model formatting as
-trusted.
+The active citation contract is sentence-level and server-owned. Candidate quote
+spans are literal NEI sentences or adjacent sentence pairs. The highest scoring
+span per article receives a marker immediately after its answer sentence only
+when it clears a conservative score and separation margin; the renderer then
+shows that stored verbatim span. A low-confidence sentence can retain broader
+article provenance in the expanded list but never gets a fake exact quote. The
+renderer never receives an opaque source ID as chat text.
 
 ## Evaluation boundary
 
@@ -88,7 +100,8 @@ Activation is intentionally manual and ordered:
 2. Add only the tested `NAYANA_RAG_VERSION` to the existing Modal secret
    `nayana`.
 3. Run `modal deploy modal_app.py` from `apps/inference`.
-4. Verify `/v1/health` reports `rag.ready: true` and `citation_mode: "paragraph"`,
+4. Verify `/v1/health` reports `rag.ready: true`, `citation_mode: "sentence"`,
+   and `evidence_reference_mode: "server_attribution"`,
    then test one grounded answer, one unsupported answer, suggested questions,
    citation expansion, refresh persistence, and a legacy chat row.
 

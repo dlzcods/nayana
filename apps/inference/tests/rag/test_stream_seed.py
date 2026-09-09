@@ -10,8 +10,16 @@ def chunk(text, finish=None, thought=False):
 
 
 def test_stream_preserves_spaces_and_excludes_thoughts():
-    text = collect_json_stream([chunk("hidden", thought=True), chunk('{"text":"hello '), chunk(' world"}', "STOP")])
-    assert text == '{"text":"hello  world"}'
+    collected = collect_json_stream([chunk("hidden", thought=True), chunk('{"text":"hello '), chunk(' world"}', "STOP")])
+    assert collected.text == '{"text":"hello  world"}'
+    assert collected.thought_part_count == 1
+
+
+def test_stream_never_falls_back_to_convenience_text_when_only_thought_parts_exist():
+    response = NS(candidates=[NS(content=NS(parts=[NS(text="hidden", thought=True)]), finish_reason="STOP")],
+                  text='{"answer":"thought leak"}')
+    with pytest.raises(ValueError, match="no answer text"):
+        collect_json_stream([response])
 
 
 def test_incomplete_stream_exposes_safe_operational_metadata_only():

@@ -154,10 +154,18 @@ class ChatMessage(BaseModel):
         return self
 
 
+class ConversationMemory(BaseModel):
+    """Small client-owned follow-up hint; never a replay of chat bubbles."""
+
+    previous_intent: Literal[
+        "overview", "symptoms", "risk", "causes", "examination", "treatment", "prevention", "urgent",
+    ] | None = None
+
+
 class ScreeningChatRequest(BaseModel):
     screening: ScreeningResult
-    summary: ExecutiveSummary | None = None
-    messages: list[ChatMessage] = Field(min_length=1, max_length=10)
+    question: str = Field(min_length=1, max_length=MAX_USER_CHAT_CHARS)
+    memory: ConversationMemory = Field(default_factory=ConversationMemory)
 
 
 class ScreeningChatResponse(BaseModel):
@@ -459,16 +467,20 @@ def rag_completion(instruction: str, payload: str, response_schema: dict | None 
     if not key:
         raise HTTPException(status_code=503, detail="Percakapan hasil belum diaktifkan.")
     client = genai.Client(api_key=key)
-    model = os.getenv("GEMINI_MODEL", DEFAULT_GEMINI_MODEL)
+    # RAG experiment: keep this isolated from summary/suggestion model settings.
+    model = "gemma-4-31b-it"
     started_at = time.monotonic()
     try:
         response_stream = client.models.generate_content_stream(
             model=model,
             contents=payload,
             config=types.GenerateContentConfig(
-                thinking_config=types.ThinkingConfig(thinking_level="HIGH"),
+                thinking_config=types.ThinkingConfig(thinking_level="MINIMAL", include_thoughts=False),
                 http_options=types.HttpOptions(timeout=RAG_PROVIDER_TIMEOUT_MS),
-                max_output_tokens=4096,
+                # Diagnostic ceiling: determine whether Gemma can ever finish
+                # the one-field JSON response before we change the contract.
+                max_output_tokens=15000,
+                temperature=0.2,
                 response_mime_type="application/json",
                 response_schema=as_genai_schema(response_schema, types) if response_schema is not None else None,
                 system_instruction=instruction,
@@ -477,7 +489,8 @@ def rag_completion(instruction: str, payload: str, response_schema: dict | None 
         # Structured-output streams are valid partial JSON strings. Join every
         # non-thought chunk before the server parser sees it; never parse an
         # arbitrary mid-stream fragment as a complete response.
-        response_text = collect_json_stream(response_stream)
+        collected = collect_json_stream(response_stream)
+        response_text = collected.text
         logger.info(
             "NEI provider completed model=%s elapsed_seconds=%.2f response_characters=%d",
             model, time.monotonic() - started_at, len(response_text),
@@ -724,15 +737,18 @@ def generate_suggested_questions(payload: SuggestedQuestionRequest) -> Suggested
 
 
 def generate_screening_chat(payload: ScreeningChatRequest) -> ScreeningChatResponse:
-    if payload.messages[-1].role != "user":
-        raise HTTPException(status_code=422, detail="Pesan terakhir perlu berupa pertanyaan pengguna.")
+    question = payload.question.strip()
+    if not question:
+        raise HTTPException(status_code=422, detail="Pertanyaan tidak boleh kosong.")
+    # Assistant bubbles, citations, and user prose stay in the browser. Only a
+    # locally-derived intent label may cross the request boundary for follow-ups.
     if rag_enabled():
         from rag.service import answer_question
         try:
-            result = answer_question(payload.messages[-1].content,
-                                     [row.model_dump() for row in payload.messages[:-1]],
+            result = answer_question(question, [],
                                      payload.screening.top_prediction.key,
-                                     build_summary_context(payload.screening), rag_completion)
+                                     build_summary_context(payload.screening), rag_completion,
+                                     memory_intent=payload.memory.previous_intent)
             # Do not rewrite text after source attribution; it could change the claim.
             return ScreeningChatResponse(**result.model_dump())
         except Exception as error:
@@ -753,12 +769,8 @@ def generate_screening_chat(payload: ScreeningChatRequest) -> ScreeningChatRespo
     context = build_summary_context(payload.screening)
     request_payload = {
         **context,
-        "summary_coverage": [
-            "orientasi seluruh kategori dan arti kemiripan pola",
-            "edukasi umum pola tertinggi",
-            "faktor umum, hal yang dapat diperhatikan, dan langkah berikutnya",
-        ] if payload.summary else [],
-        "conversation": [message.model_dump() for message in payload.messages],
+        "question": question,
+        "conversation_memory": payload.memory.model_dump(exclude_none=True),
     }
 
     try:
@@ -929,6 +941,7 @@ def build_demo_result(case_id: str, screening_id: str) -> ScreeningResult:
 @app.get("/v1/health")
 def health_check():
     rag_version = os.getenv("NAYANA_RAG_VERSION", "").strip()
+    evidence_reference_mode = "server_attribution" if rag_version else None
     return {
         "status": "ready" if MODEL_PATH.is_dir() else "needs_model",
         "model_version": MODEL_VERSION,
@@ -941,7 +954,8 @@ def health_check():
             "configured": rag_enabled(),
             "version": rag_version or None,
             "sources": 5 if rag_enabled() else 0,
-            "citation_mode": "paragraph",
+            "citation_mode": "sentence",
+            "evidence_reference_mode": evidence_reference_mode,
             "ready": bool(rag_version),
         },
     }

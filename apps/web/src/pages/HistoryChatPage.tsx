@@ -3,7 +3,7 @@ import { Link, useParams } from '@tanstack/react-router'
 import { BackArrowIcon } from '../components/BackArrowIcon'
 import { SiteHeader } from '../components/SiteHeader'
 import { ChatMessageContent } from './ScreeningChatPage'
-import { askScreeningQuestion, demoCaseIdFromScreeningId, demoCaseImageUrl, getSuggestedQuestions, type ScreeningChatMessage, type SuggestedQuestion } from '../lib/screening-api'
+import { askScreeningQuestion, compactConversationMemory, demoCaseIdFromScreeningId, demoCaseImageUrl, getSuggestedQuestions, type ScreeningChatMessage, type SuggestedQuestion } from '../lib/screening-api'
 import { getConversationMessages, getOrCreateConversation, saveConversationMessage, type ScreeningConversation } from '../lib/screening-conversations'
 import { getAccountHistoryRecord, getAccountPhoto, screeningFromHistory, type ScreeningHistoryItem } from '../lib/screening-history'
 import { SuggestedQuestionStarter } from '../components/SuggestedQuestionStarter'
@@ -112,10 +112,10 @@ export function HistoryChatPage() {
       }
       if (epoch !== roomEpoch.current) return
       const response = cachedAnswer?.answer ? cachedAnswer : await askScreeningQuestion({
-          screening: screeningFromHistory(record),
-          summary: record.executive_summary,
-          messages: nextMessages.slice(-10),
-        })
+        screening: screeningFromHistory(record),
+        question: cleanQuestion,
+        memory: compactConversationMemory(nextMessages.slice(0, -1)),
+      })
       const answer = response.answer?.trim()
       if (!answer) throw new Error('Jawaban bersumber belum tersedia.')
       const assistantMessage: ScreeningChatMessage = { ...response, role: 'assistant', content: answer }

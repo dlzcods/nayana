@@ -24,8 +24,9 @@ def evaluate(index_path: Path, cases_path: Path) -> dict:
                   (not case.get("heading") or re.search(case["heading"], row["heading"], re.I)) for row in hits)
         rows.append({**case, "query": query, "supported": supported, "hit_at_4": hit if supported else None,
                      "seconds": round(time.monotonic() - start, 4),
-                     "hits": [{"id": row["id"], "source": row["source_id"], "heading": row["heading"],
-                               "score": round(row["score"], 4)} for row in hits]})
+                      "hits": [{"id": row["id"], "source": row["source_id"], "heading": row["heading"],
+                               "score": round(row["score"], 4),
+                               "retrieval": row.get("retrieval", {})} for row in hits]})
     summary = {}
     for split in ("development", "heldout"):
         supported_rows = [row for row in rows if row["split"] == split and row["supported"]]

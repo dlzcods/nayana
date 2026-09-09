@@ -5,6 +5,8 @@ import os
 from pathlib import Path
 import re
 import threading
+from collections import Counter
+from math import log
 
 from .common import ARTIFACTS
 from .index import load_manifest
@@ -13,6 +15,11 @@ TOPIC_NAMES = {"cataract": "cataracts katarak", "diabetic_retinopathy": "diabeti
                "glaucoma": "glaucoma glaukoma", "normal": "eye health healthy vision"}
 TOPIC_PATTERNS = {"cataract": r"katar[ae]k|cataract", "diabetic_retinopathy": r"retinopat|retinopath|diabet",
                   "glaucoma": r"gl[au]+[ck]om"}
+TOPIC_SOURCE_IDS = {
+    "cataract": {"cataracts"},
+    "diabetic_retinopathy": {"diabetic-retinopathy"},
+    "glaucoma": {"glaucoma"},
+}
 INTENT_EXPANSIONS = (
     (r"periksa|memeriksa|pemeriksaan|diperiksa|cek|tes|deteksi", "eye exam comprehensive dilated eye exam diagnosis testing"),
     (r"penyebab|sebab|kenapa|risiko", "causes risk factors"),
@@ -40,7 +47,60 @@ def expand_intent(query: str, question: str) -> str:
     return query + (("\nIntent: " + " ".join(additions)) if additions else "")
 
 
-def contextual_query(question: str, history: list[dict], topic: str) -> str:
+def explicit_topics(query: str) -> tuple[str, ...]:
+    """Return only diseases named in the newest query, in a stable order.
+
+    This is deliberately a source guard, not a diagnostic inference from the
+    screening label. A general question is allowed to search the full corpus.
+    """
+    return tuple(key for key, pattern in TOPIC_PATTERNS.items() if re.search(pattern, query, re.I))
+
+
+def allowed_source_ids(query: str) -> set[str] | None:
+    topics = explicit_topics(query)
+    if not topics:
+        return None
+    return set().union(*(TOPIC_SOURCE_IDS[topic] for topic in topics))
+
+
+def _terms(text: str) -> list[str]:
+    return re.findall(r"[a-zA-ZÀ-ÿ0-9]{2,}", text.lower())
+
+
+class TinyBM25:
+    """Small in-memory BM25 index for the immutable five-article corpus."""
+    def __init__(self, rows: list[dict]):
+        self.documents = [_terms(" ".join(str(row.get(key, "")) for key in ("title", "heading", "text")))
+                          for row in rows]
+        self.lengths = [len(document) for document in self.documents]
+        self.average_length = sum(self.lengths) / max(1, len(self.lengths))
+        document_frequency: Counter[str] = Counter()
+        for document in self.documents:
+            document_frequency.update(set(document))
+        count = len(self.documents)
+        self.idf = {term: log(1 + (count - frequency + .5) / (frequency + .5))
+                    for term, frequency in document_frequency.items()}
+
+    def rank(self, query: str) -> list[tuple[float, int]]:
+        query_terms = set(_terms(query))
+        scored: list[tuple[float, int]] = []
+        for index, document in enumerate(self.documents):
+            frequencies = Counter(document)
+            denominator_base = 1.2 * (1 - .75 + .75 * self.lengths[index] / max(1, self.average_length))
+            score = sum(self.idf.get(term, 0.0) * frequencies[term] * 2.2 /
+                        (frequencies[term] + denominator_base) for term in query_terms)
+            scored.append((score, index))
+        return sorted(scored, key=lambda item: (-item[0], item[1]))
+
+
+MEMORY_INTENT_TERMS = {
+    "overview": "what is overview", "symptoms": "symptoms signs", "risk": "risk factors",
+    "causes": "causes", "examination": "eye exam diagnosis testing", "treatment": "treatment medicines surgery",
+    "prevention": "prevention protect healthy vision", "urgent": "when to get help right away urgent",
+}
+
+
+def contextual_query(question: str, history: list[dict], topic: str, memory_intent: str | None = None) -> str:
     """Bounded conversation context; never add an inferred personal condition."""
     query = question.strip()
     explicit = [key for key, pattern in TOPIC_PATTERNS.items() if re.search(pattern, query, re.I)]
@@ -57,6 +117,10 @@ def contextual_query(question: str, history: list[dict], topic: str) -> str:
         query += "\nTopic being discussed: " + context
         if previous:
             query += "\nPrevious question: " + previous[:300]
+        # New browser memory never sends prior prose. It supplies only a
+        # deterministic intent label derived locally from the last user turn.
+        if memory_intent in MEMORY_INTENT_TERMS:
+            query += "\nPrevious conversation intent: " + MEMORY_INTENT_TERMS[memory_intent]
     return expand_intent(query, question)
 
 
@@ -72,6 +136,7 @@ class Retriever:
             raise ValueError("Index/chunk mismatch")
         self.encoder = SentenceTransformer(str(path / "encoder"), device="cpu", local_files_only=True)
         self.encoder.max_seq_length = 512
+        self.bm25 = TinyBM25(self.chunks)
         self.lock = threading.Lock()
 
     def search(self, query: str, limit: int = 4) -> list[dict]:
@@ -84,25 +149,45 @@ class Retriever:
             query = "query: " + query
         with self.lock:
             vector = self.encoder.encode([query], normalize_embeddings=True, show_progress_bar=False)
-        scores, indices = self.index.search(np.asarray(vector, dtype="float32"), min(20, len(self.chunks)))
+        # The corpus is intentionally tiny (44 chunks). Search all rows before
+        # applying a named-condition guard; a top-20 pre-cut can otherwise
+        # discard the correct condition before fusion has a chance to rank it.
+        scores, indices = self.index.search(np.asarray(vector, dtype="float32"), len(self.chunks))
         intents = [heading for pattern, heading in HEADING_INTENTS if re.search(pattern, query, re.I)]
+        permitted = allowed_source_ids(query)
+
+        dense_candidates = [int(index) for index in indices[0] if index >= 0
+                            and (permitted is None or self.chunks[int(index)]["source_id"] in permitted)]
+        lexical_candidates = [index for _score, index in self.bm25.rank(query)
+                              if permitted is None or self.chunks[index]["source_id"] in permitted]
+        # Rank after guarding. A named disease must not be penalised merely
+        # because rows from an ineligible disease occupied earlier ranks.
+        dense_rank = {index: rank for rank, index in enumerate(dense_candidates, start=1)}
+        lexical_rank = {index: rank for rank, index in enumerate(lexical_candidates, start=1)}
+        # Reciprocal-rank fusion keeps both retrieval signals ordinal. It avoids
+        # pretending vector cosine and BM25 values have a common numeric scale.
+        candidates = set(dense_rank) | set(lexical_rank)
         ranked = []
-        for score, index in zip(scores[0], indices[0]):
-            if index < 0:
-                continue
-            heading = self.chunks[int(index)]["heading"]
-            boost = .08 if any(re.search(pattern, heading, re.I) for pattern in intents) else 0
-            ranked.append((float(score) + boost, score, index))
-        ranked.sort(reverse=True, key=lambda item: item[0])
+        for index in candidates:
+            heading = self.chunks[index]["heading"]
+            heading_match = any(re.search(pattern, heading, re.I) for pattern in intents)
+            fusion = (1 / (60 + dense_rank[index]) if index in dense_rank else 0) + \
+                     (1 / (60 + lexical_rank[index]) if index in lexical_rank else 0)
+            ranked.append((fusion, heading_match, dense_rank.get(index, len(self.chunks) + 1), index))
+        ranked.sort(key=lambda item: (-item[0], not item[1], item[2], item[3]))
         selected = []
-        for _, score, index in ranked:
+        for fusion, _heading_match, _dense_rank, index in ranked:
             row = self.chunks[int(index)]
             # Avoid spending the context budget on heavily overlapping windows.
             duplicate = any(old["source_id"] == row["source_id"] and old["heading"] == row["heading"]
                             and max(0, min(old["end"], row["end"]) - max(old["start"], row["start"]))
                             > .6 * min(old["end"] - old["start"], row["end"] - row["start"]) for old in selected)
             if not duplicate:
-                selected.append({**row, "score": float(score), "corpus_version": self.version})
+                selected.append({**row, "score": float(fusion), "corpus_version": self.version,
+                                 "retrieval": {"method": "e5_bm25_rrf",
+                                               "topic_guard": sorted(permitted) if permitted else [],
+                                               "dense_rank": dense_rank.get(index),
+                                               "lexical_rank": lexical_rank.get(index)}})
             if len(selected) == limit:
                 break
         return selected

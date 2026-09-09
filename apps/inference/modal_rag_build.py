@@ -2,6 +2,8 @@
 
 From apps/inference: modal run modal_rag_build.py
 """
+from pathlib import Path
+
 import modal
 
 LOCAL = Path(__file__).resolve().parent

@@ -1,11 +1,12 @@
-"""Legacy paragraph-level NEI grounding orchestration."""
+"""Hybrid-retrieval NEI grounding with server-owned sentence citations."""
 from __future__ import annotations
 
 import json
 import re
 from collections.abc import Callable
 
-from .citations import DRAFT_JSON_SCHEMA, GROUNDING_INSTRUCTION, GroundedResponse, evidence_payload, parse_json, validate_answer
+from .citations import (ANSWER_JSON_SCHEMA, GROUNDING_INSTRUCTION, GroundedResponse,
+                        attribute_answer, evidence_payload, parse_answer)
 from .retrieve import contextual_query, get_retriever
 
 
@@ -53,7 +54,7 @@ def starter_questions(topic: str) -> list[dict]:
 
 
 def answer_question(question: str, history: list[dict], topic: str, context: dict,
-                    complete: Callable[[str, str, dict], str]) -> GroundedResponse:
+                    complete: Callable[[str, str, dict], str], memory_intent: str | None = None) -> GroundedResponse:
     retriever = get_retriever()
     if re.search(r"(arti|maksud|makna).*(persen|skor|angka|%|kemiripan)|(persen|skor|angka|%).*(arti|maksud|makna)", question, re.I):
         return GroundedResponse(
@@ -62,19 +63,22 @@ def answer_question(question: str, history: list[dict], topic: str, context: dic
                    "Hasil ini digunakan sebagai bahan skrining awal; dokter spesialis mata (Sp.M) menilai kondisi melalui pemeriksaan langsung.",
             source_status="application_context", corpus_version=retriever.version,
         )
-    query = contextual_query(question, history, topic)
+    query = contextual_query(question, history, topic, memory_intent=memory_intent)
     evidence = retriever.search(query)
     if re.search(r"mendadak|tiba.tiba|nyeri.*hebat|sakit.*hebat|sudden|severe.*pain", question, re.I):
         urgent = retriever.search("glaucoma When to get help right away intense eye pain nausea red blurry vision", limit=2)
-        evidence = list({row["id"]: row for row in urgent + evidence}.values())
+        evidence = list({row["id"]: row for row in urgent + evidence}.values())[:4]
     if not evidence:
         return GroundedResponse(
             answer="Sumber NEI yang tersedia belum cukup untuk menjawab pertanyaan tersebut secara spesifik.",
             source_status="insufficient_evidence", corpus_version=retriever.version,
         )
-    payload = {"question": question, "conversation": history[-6:],
-               "screening_context": context, "evidence": evidence_payload(evidence)}
-    # One provider call only. Invalid source IDs/JSON propagate as a genuine
-    # unavailable response; they are never rewritten as medical content.
-    text = complete(GROUNDING_INSTRUCTION, json.dumps(payload, ensure_ascii=False), DRAFT_JSON_SCHEMA)
-    return validate_answer(parse_json(text), evidence, retriever.version)
+    # History has already been reduced to one previous user question for
+    # retrieval. Never replay browser chat bubbles to the provider.
+    payload = {"question": question, "screening_context": context,
+               "evidence": evidence_payload(evidence)}
+    # One provider call: prose only. Citation identity, markers, and exact
+    # quote selection are server-owned after the model returns its answer.
+    text = complete(GROUNDING_INSTRUCTION, json.dumps(payload, ensure_ascii=False), ANSWER_JSON_SCHEMA)
+    return attribute_answer(parse_answer(text), evidence, retriever.version,
+                            encoder=getattr(retriever, "encoder", None))

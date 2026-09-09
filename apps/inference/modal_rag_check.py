@@ -36,20 +36,20 @@ def check(version: str, suggestions_only: bool = False, seed_all: bool = False, 
         client = genai.Client(api_key=os.environ["GEMINI_API_KEY"])
         try:
             response_stream = client.models.generate_content_stream(
-                model=os.getenv("GEMINI_MODEL", "gemma-4-26b-a4b-it"), contents=payload,
+                model="gemma-4-31b-it", contents=payload,
                 config=types.GenerateContentConfig(
-                    thinking_config=types.ThinkingConfig(thinking_level="HIGH"),
-                    # This is an offline, one-time seed. Keep HIGH reasoning,
-                    # but cap the compact structured response at 4K tokens and
-                    # give the provider a full five-minute request deadline.
-                    max_output_tokens=4096,
+                    thinking_config=types.ThinkingConfig(thinking_level="MINIMAL", include_thoughts=False),
+                    # This is an offline, one-time seed. Match the production
+                    # RAG chat thinking level, use the same diagnostic 15K cap,
+                    # and give the provider a full five-minute request deadline.
+                    max_output_tokens=15000,
                     http_options=types.HttpOptions(timeout=300000),
                     response_mime_type="application/json",
                     response_schema=as_genai_schema(response_schema, types) if response_schema is not None else None,
                     system_instruction=instruction,
                 ),
             )
-            return collect_json_stream(response_stream)
+            return collect_json_stream(response_stream).text
         finally:
             client.close()
 

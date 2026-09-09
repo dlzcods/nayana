@@ -104,6 +104,31 @@ export type ScreeningChatMessage = GroundingMetadata & {
   content: string
 }
 
+export type ScreeningConversationIntent =
+  | 'overview' | 'symptoms' | 'risk' | 'causes' | 'examination' | 'treatment' | 'prevention' | 'urgent'
+
+export type ScreeningConversationMemory = {
+  previous_intent?: ScreeningConversationIntent
+}
+
+const conversationIntentRules: Array<[ScreeningConversationIntent, RegExp]> = [
+  ['urgent', /mendadak|tiba.?tiba|nyeri.*hebat|sakit.*hebat|darurat/i],
+  ['examination', /periksa|memeriksa|pemeriksaan|cek|tes|deteksi/i],
+  ['treatment', /obat|terapi|operasi|ditangani|penanganan|sembuh/i],
+  ['symptoms', /gejala|ciri|tanda|terasa|berasa/i],
+  ['risk', /risiko|berisiko/i],
+  ['causes', /penyebab|sebab|kenapa/i],
+  ['prevention', /cegah|mencegah|menjaga|lindungi/i],
+  ['overview', /apa itu|apa yang dimaksud|pengertian|gambaran/i],
+]
+
+/** Derives a tiny follow-up hint locally. No prior chat text is transmitted. */
+export function compactConversationMemory(messages: ScreeningChatMessage[]): ScreeningConversationMemory | undefined {
+  const previousQuestion = [...messages].reverse().find((message) => message.role === 'user')?.content || ''
+  const previousIntent = conversationIntentRules.find(([, pattern]) => pattern.test(previousQuestion))?.[0]
+  return previousIntent ? { previous_intent: previousIntent } : undefined
+}
+
 export type SuggestedQuestion = GroundingMetadata & {
   id: string
   question: string
@@ -217,13 +242,13 @@ export function getExecutiveSummary(screening: ScreeningResult) {
 
 export function askScreeningQuestion(options: {
   screening: ScreeningResult
-  summary: ExecutiveSummary | null
-  messages: ScreeningChatMessage[]
+  question: string
+  memory?: ScreeningConversationMemory
 }) {
   return request<{ answer: string } & GroundingMetadata>('/v1/screenings/chat', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ ...options, messages: options.messages.slice(-10).map(({ role, content }) => ({ role, content })) }),
+    body: JSON.stringify(options),
   })
 }
 

@@ -9,6 +9,7 @@ import {
   getExecutiveSummary,
   getScreeningResult,
   getSuggestedQuestions,
+  compactConversationMemory,
   type ExecutiveSummary,
   type ScreeningChatMessage,
   type ScreeningResult,
@@ -181,7 +182,11 @@ export function ScreeningChatPage() {
         setFailedQuestion(null)
         if (!saveSessionChat(screeningId, completed)) setError('Jawaban tampil, tetapi browser belum dapat menyimpan sesi ini untuk dimuat ulang.')
       } else {
-        const response = await askScreeningQuestion({ screening, summary, messages: nextMessages })
+        const response = await askScreeningQuestion({
+          screening,
+          question: cleanQuestion,
+          memory: compactConversationMemory(nextMessages.slice(0, -1)),
+        })
         if (epoch !== roomEpoch.current) return
         const completed: ScreeningChatMessage[] = [...nextMessages, { ...response, role: 'assistant', content: response.answer.trim() }]
         setMessages(completed)

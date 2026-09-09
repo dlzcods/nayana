@@ -89,12 +89,20 @@ menaruh `FIRECRAWL_API_KEY` pada secret frontend atau file yang masuk Git.
 
 ### Perilaku provider chat
 
-Jawaban RAG tetap merupakan satu request dinamis: server mengambil evidence NEI
-yang relevan, lalu meminta Gemma menjawab dalam Bahasa Indonesia menggunakan ID
-bukti itu. Setiap paragraf diikat ke source ID yang diizinkan; server menempatkan
-marker, URL, dan excerpt sendiri untuk kartu sitasi/highlight. ID internal tidak
-boleh muncul dalam teks yang dirender dan dibersihkan atau ditolak di boundary
-server.
+Jawaban RAG tetap merupakan satu request dinamis: server mengambil maksimal empat
+evidence NEI yang relevan, lalu meminta Gemma hanya menulis jawaban Bahasa
+Indonesia dalam satu field `answer`. Gemma tidak menerima atau menghasilkan ID,
+alias, marker, URL, maupun kutipan sumber. Retrieval menggabungkan E5 semantic
+search dan BM25 keyword search dengan reciprocal-rank fusion; pertanyaan yang
+menyebut satu kondisi secara eksplisit tidak boleh membawa source kondisi lain.
+Setelah itu server membandingkan tiap kalimat jawaban dengan kandidat kalimat
+verbatim dari evidence memakai encoder E5 yang sama. Hanya kecocokan berambang
+konservatif yang mendapat marker tepat setelah kalimat dan quote card; jika
+keyakinannya rendah, kalimat tetap tampil tanpa klaim quote spesifik.
+
+Instruksi dan schema membatasi jawaban hingga tiga paragraf edukatif dan satu
+batas keselamatan, dengan total 1.800 karakter. Evidence diparafrasekan, bukan
+disalin atau diterjemahkan harfiah dari artikel NEI.
 
 Pertanyaan starter adalah navigasi deterministik per topik, bukan jawaban medis
 yang dicache. Memilihnya tetap mengirim satu request RAG biasa.
