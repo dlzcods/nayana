@@ -13,7 +13,7 @@ required_paths=(
     "apps/inference/assets/examples"
     "apps/inference/model.sha256"
     "apps/inference/requirements.txt"
-    "docs/provenance/hugging-face-space.md"
+    "README.md"
     "research/notebooks/eye_diseases_classification_4x.ipynb"
     "third_party/eye-disease-classification/LICENSE.txt"
 )
