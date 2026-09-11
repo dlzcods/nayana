@@ -1,16 +1,7 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useState } from 'react'
 import { Link, useParams } from '@tanstack/react-router'
-import { SiteFooter } from '../components/SiteFooter'
-import { SiteHeader } from '../components/SiteHeader'
 import { BackArrowIcon } from '../components/BackArrowIcon'
-import { ExecutiveSummaryCard } from '../components/ExecutiveSummaryCard'
-import { ScreeningChat } from '../components/ScreeningChat'
 import { ScreeningFinalizing } from '../components/ScreeningFinalizing'
-import { ScreeningPdfAction } from '../components/ScreeningPdfAction'
-import { ScreeningSaveActions } from '../components/ScreeningSaveActions'
-import { DiscussionKit } from '../components/DiscussionKit'
-import { ResultPathway } from '../components/ResultPathway'
-import { discussionQuestionsFor } from '../lib/discussion-questions'
 import {
   demoCaseIdFromScreeningId,
   demoCaseImageUrl,
@@ -28,9 +19,6 @@ export function ScreeningResultPage() {
   const [summary, setSummary] = useState<ExecutiveSummary | null>(null)
   const [summaryError, setSummaryError] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
-  const [savedDestination, setSavedDestination] = useState<{ kind: 'account'; recordId: string } | { kind: 'browser' } | null>(null)
-  const [discussionQuestions, setDiscussionQuestions] = useState<string[]>([])
-  const resultDetailRef = useRef<HTMLElement | null>(null)
 
   useEffect(() => {
     let active = true
@@ -40,8 +28,6 @@ export function ScreeningResultPage() {
     setSummary(null)
     setSummaryError(null)
     setError(null)
-    setSavedDestination(null)
-    setDiscussionQuestions([])
 
     void (async () => {
       const cached = getActiveScreening(screeningId)
@@ -80,22 +66,18 @@ export function ScreeningResultPage() {
     return () => { active = false }
   }, [screeningId])
 
-  useEffect(() => {
-    if (!result || !resultDetailRef.current) return
-    const timer = window.setTimeout(() => {
-      window.scrollTo({ top: Math.max(0, resultDetailRef.current!.offsetTop - 104), behavior: 'auto' })
-    }, 0)
-    return () => window.clearTimeout(timer)
-  }, [result])
-
-  useEffect(() => {
-    if (result) setDiscussionQuestions(discussionQuestionsFor(result).map((item) => item.question))
-  }, [result])
+  const chartPredictions = result?.predictions.slice(0, 4) || []
+  const summaryText = result
+    ? summary
+      ? summary.general_information || summary.overview
+      : summaryError
+        ? `Model menemukan pola pada foto fundus yang paling mirip dengan kategori ${result.top_prediction.label.toLowerCase()}. Kategori ini perlu dipahami bersama keluhan, riwayat kesehatan, dan pemeriksaan langsung oleh dokter mata.`
+        : 'Ringkasan sedang disiapkan dari hasil model.'
+    : ''
 
   return (
     <div className="app-page">
-      <SiteHeader />
-      <main className={`app-shell app-result ${!result && !error ? 'app-result--loading' : ''}`}>
+      <main className={`app-shell app-result result-document ${!result && !error ? 'app-result--loading' : ''}`}>
         {!result && !error && (
           <ScreeningFinalizing
             source="demo"
@@ -118,59 +100,60 @@ export function ScreeningResultPage() {
         )}
 
         {result && (
-          <>
-            <section className="app-result__intro" aria-labelledby="result-title">
-              <p className="app-kicker">Hasil skrining awal</p>
-              <h1 id="result-title">Pola paling mirip dengan {result.top_prediction.label.toLowerCase()}.</h1>
-              <p>
-                Berikut adalah hasil dari contoh fundus yang dipilih. Persentase menunjukkan kemiripan pola
-                dalam kategori model.
-              </p>
-            </section>
+          <section className="result-document__body" aria-labelledby="result-title">
+            <header className="result-document__header">
+              <Link className="result-document__back" to="/history" search={{ hasil: undefined }} aria-label="Kembali ke riwayat skrining"><BackArrowIcon /><span>Hasil skrining</span></Link>
+              <span className="result-document__brand">NAYANA</span>
+            </header>
 
-            <section ref={resultDetailRef} className="screening-result" aria-label="Rincian hasil skrining contoh">
-              <figure className="screening-result__image">
+            <div className="result-document__intro">
+              <p className="app-kicker">{result.source === 'demo' ? 'Mode contoh' : 'Skrining awal'}</p>
+              <h1 id="result-title">Hasil skrining Anda</h1>
+              <p>Ringkasan singkat untuk membantu Anda memahami hasil dan menyiapkan percakapan dengan dokter mata.</p>
+            </div>
+
+            <section className="result-evidence" aria-labelledby="model-result-title">
+              {demoCaseImageUrl(result.case_id || '') && <figure className="result-evidence__image">
                 <img src={demoCaseImageUrl(result.case_id || '')} alt="Foto fundus contoh yang dianalisis" />
-                <figcaption>Foto fundus contoh untuk demonstrasi NAYANA.</figcaption>
-              </figure>
-
-              <div className="screening-result__data">
-                <p className="screening-result__eyebrow">Indikasi model</p>
-                <h2>{result.top_prediction.label}</h2>
-                <div className="screening-result__rows" aria-label="Perbandingan kemiripan pola">
-                  {result.predictions.map((prediction, index) => (
-                    <div className={index === 0 ? 'screening-row screening-row--primary' : 'screening-row'} key={prediction.key}>
-                      <span>{prediction.label}</span>
-                      <i aria-hidden="true"><b style={{ width: `${Math.round(prediction.score * 100)}%` }} /></i>
-                      <strong>{Math.round(prediction.score * 100)}%</strong>
-                    </div>
-                  ))}
-                </div>
+                <figcaption>Foto fundus yang dianalisis</figcaption>
+              </figure>}
+              <div className="result-evidence__reading">
+                <p className="app-kicker">Indikasi model</p>
+                <h2 id="model-result-title">Pola paling mirip dengan {result.top_prediction.label.toLowerCase()}.</h2>
+                <p className="result-evidence__score"><strong>{Math.round(result.top_prediction.score * 100)}%</strong><span>kemiripan pola tertinggi pada kategori ini.</span></p>
+                <p className="result-evidence__limit">Skor ini membandingkan pola pada model, bukan peluang Anda memiliki kondisi tertentu.</p>
               </div>
-
-              <ExecutiveSummaryCard screening={result} summary={summary} error={summaryError} />
-
-              <ScreeningSaveActions result={result} summary={summary} onSaved={setSavedDestination} />
-
-              <ScreeningChat screening={result} summary={summary} savedDestination={savedDestination} />
-
-              <DiscussionKit screening={result} selectedQuestions={discussionQuestions} onChange={setDiscussionQuestions} />
-
-              <ResultPathway action={
-                <Link className="app-primary-action app-primary-action--back" to="/screening">
-                  <BackArrowIcon />
-                  Pilih foto atau contoh lain
-                </Link>
-              } />
-
-              <ScreeningPdfAction screening={result} summary={summary} discussionQuestions={discussionQuestions} />
-
-              <p className="screening-result__disclaimer">{result.disclaimer}</p>
             </section>
-          </>
+
+            <section className="result-report__grid" aria-label="Rincian hasil">
+              <section className="result-report__comparison" aria-labelledby="comparison-title">
+                <div className="result-report__card-head">
+                  <div><p className="app-kicker" id="comparison-title">Perbandingan kategori</p><p className="result-report__microcopy">kemiripan pola</p></div>
+                  <span className="result-report__count">{chartPredictions.length} kategori</span>
+                </div>
+                <div className="result-category-lines" role="img" aria-label="Garis perbandingan kemiripan pola antar kategori">
+                  {chartPredictions.map((prediction) => <div key={prediction.key} className={prediction.key === result.top_prediction.key ? 'result-category-line is-leading' : 'result-category-line'}>
+                    <div className="result-category-line__meta"><span>{prediction.label}</span><b>{Math.round(prediction.score * 100)}%</b></div>
+                    <i aria-hidden="true"><b style={{ width: `${Math.round(prediction.score * 100)}%` }} /></i>
+                  </div>)}
+                </div>
+                <p className="result-report__note">Perbandingan relatif antar kategori model.</p>
+              </section>
+
+              <section className="result-report__summary" aria-live="polite" aria-labelledby="summary-title">
+                <p className="app-kicker" id="summary-title">Ringkasan otomatis</p>
+                <p className="result-report__summary-text">{summaryText}</p>
+                <p className="result-report__disclaimer">Bukan diagnosis medis. Konfirmasi dengan dokter mata.</p>
+              </section>
+            </section>
+
+            <section className="result-document__next">
+              <div><p className="app-kicker">Jika Anda ingin lanjut</p><h2>Siapkan bahan diskusi dengan dokter.</h2><p className="result-document__next-copy">Pilih pertanyaan yang ingin dibawa. PDF hanya dibuat saat Anda memintanya.</p></div>
+              <Link className="app-primary-action" to="/screening/results/$screeningId/discussion" params={{ screeningId }}>Buka Doctor Kit</Link>
+            </section>
+          </section>
         )}
       </main>
-      {(result || error) && <SiteFooter />}
     </div>
   )
 }

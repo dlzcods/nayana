@@ -15,7 +15,7 @@ import {
   type ScreeningResult,
   type SuggestedQuestion,
 } from '../lib/screening-api'
-import { getActiveScreening, saveActiveScreening, setActiveScreeningChatAccess, getSessionChat, saveSessionChat } from '../lib/screening-session'
+import { getActiveScreening, saveActiveScreening, getSessionChat, saveSessionChat } from '../lib/screening-session'
 import { SuggestedQuestionStarter } from '../components/SuggestedQuestionStarter'
 import { ChatSources } from '../components/ChatSources'
 import type { ChatCitation } from '../lib/screening-api'
@@ -233,11 +233,6 @@ export function ScreeningChatPage() {
     initialMessagesPositioned.current = true
   }, [messages])
 
-  function continueWithoutSaving() {
-    setActiveScreeningChatAccess(screeningId, 'temporary')
-    setTemporaryAccessApproved(true)
-  }
-
   const backPath = screeningId.startsWith('demo_')
     ? `/screening/results/${encodeURIComponent(screeningId)}`
     : '/screening'
@@ -346,7 +341,6 @@ export function ScreeningChatPage() {
               </p>
               <div className="app-dialog__actions">
                 <a className="app-primary-action" href={backPath}>Kembali untuk menyimpan</a>
-                <button className="app-text-action" type="button" onClick={continueWithoutSaving}>Lanjut tanpa menyimpan</button>
               </div>
             </section>
           </div>

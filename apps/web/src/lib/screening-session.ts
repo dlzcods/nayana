@@ -20,6 +20,7 @@ export type ActiveScreening = {
   screening: ScreeningResult
   summary: ExecutiveSummary | null
   chatAccess?: 'temporary' | 'saved'
+  discussionQuestions?: string[]
 }
 
 export function saveActiveScreening(active: ActiveScreening) {

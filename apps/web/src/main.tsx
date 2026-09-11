@@ -12,6 +12,8 @@ import { LegalPage } from './pages/LegalPage'
 import { EvidencePage } from './pages/EvidencePage'
 import { ScreeningPage } from './pages/ScreeningPage'
 import { ScreeningResultPage } from './pages/ScreeningResultPage'
+import { ModelDetailPage } from './pages/ModelDetailPage'
+import { DoctorKitPage } from './pages/DoctorKitPage'
 import { LoginPage } from './pages/LoginPage'
 import { AccountPage } from './pages/AccountPage'
 import { ScreeningChatPage } from './pages/ScreeningChatPage'
@@ -66,6 +68,9 @@ const screeningChatRoute = createRoute({
   component: ScreeningChatPage,
 })
 
+const modelDetailRoute = createRoute({ getParentRoute: () => rootRoute, path: '/screening/results/$screeningId/detail', component: ModelDetailPage })
+const doctorKitRoute = createRoute({ getParentRoute: () => rootRoute, path: '/screening/results/$screeningId/discussion', component: DoctorKitPage })
+
 const personalScreeningRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: '/screening/upload',
@@ -110,6 +115,8 @@ const routeTree = rootRoute.addChildren([
   accountRoute,
   historyRoute,
   historyChatRoute,
+  modelDetailRoute,
+  doctorKitRoute,
   screeningChatRoute,
   screeningResultRoute,
 ])

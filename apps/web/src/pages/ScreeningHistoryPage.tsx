@@ -5,7 +5,6 @@ import { SiteHeader } from '../components/SiteHeader'
 import { BackArrowIcon } from '../components/BackArrowIcon'
 import { ScreeningPdfAction } from '../components/ScreeningPdfAction'
 import { DiscussionKit } from '../components/DiscussionKit'
-import { discussionQuestionsFor } from '../lib/discussion-questions'
 import {
   deleteAccountHistory,
   getAccountHistory,
@@ -43,11 +42,13 @@ export function ScreeningHistoryPage() {
   const [error, setError] = useState<string | null>(null)
   const [filtersOpen, setFiltersOpen] = useState(false)
   const [photo, setPhoto] = useState<{ recordId: string; url: string | null; status: 'idle' | 'loading' | 'ready' | 'unavailable' }>({ recordId: '', url: null, status: 'idle' })
-  const [deletingId, setDeletingId] = useState<string | null>(null)
-  const [deleteTarget, setDeleteTarget] = useState<ScreeningHistoryItem | null>(null)
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(() => new Set())
+  const [isDeleting, setIsDeleting] = useState(false)
+  const [deleteTargets, setDeleteTargets] = useState<ScreeningHistoryItem[]>([])
   const [discussionQuestions, setDiscussionQuestions] = useState<string[]>([])
   const cancelDeleteRef = useRef<HTMLButtonElement>(null)
   const deleteDialogRef = useRef<HTMLElement>(null)
+  const selectAllRef = useRef<HTMLInputElement>(null)
 
   useEffect(() => { selectedIdRef.current = selectedIdFromUrl }, [selectedIdFromUrl])
 
@@ -68,6 +69,7 @@ export function ScreeningHistoryPage() {
         .then((records) => {
           if (!active) return
           setHistory(records)
+          setSelectedIds((current) => new Set([...current].filter((recordId) => records.some((record) => record.id === recordId))))
           const selectedStillExists = Boolean(selectedIdRef.current && records.some((record) => record.id === selectedIdRef.current))
           if (!selectedStillExists && records[0]?.id) {
             void navigate({ search: { hasil: records[0].id }, replace: true, resetScroll: false })
@@ -95,10 +97,19 @@ export function ScreeningHistoryPage() {
   const selectedId = selected?.id || ''
   const selectedPhotoPath = selected?.photo_path || null
   const selectedPhotoUrl = photo.recordId === selected?.id ? photo.url : null
+  const selectedRecords = useMemo(
+    () => history.filter((record) => selectedIds.has(record.id)),
+    [history, selectedIds],
+  )
+  const allRecordsSelected = history.length > 0 && selectedRecords.length === history.length
+  const someRecordsSelected = selectedRecords.length > 0 && !allRecordsSelected
 
   useEffect(() => {
-    if (selected) setDiscussionQuestions(discussionQuestionsFor(screeningFromHistory(selected)).map((item) => item.question))
-    else setDiscussionQuestions([])
+    if (selectAllRef.current) selectAllRef.current.indeterminate = someRecordsSelected
+  }, [someRecordsSelected])
+
+  useEffect(() => {
+    setDiscussionQuestions([])
   }, [selected])
 
   useEffect(() => {
@@ -130,10 +141,10 @@ export function ScreeningHistoryPage() {
   }, [selectedId, selectedPhotoPath])
 
   useEffect(() => {
-    if (!deleteTarget) return
+    if (!deleteTargets.length) return
     const focusTimer = window.setTimeout(() => cancelDeleteRef.current?.focus(), 0)
     function onKeyDown(event: KeyboardEvent) {
-      if (event.key === 'Escape' && !deletingId) setDeleteTarget(null)
+      if (event.key === 'Escape' && !isDeleting) setDeleteTargets([])
       if (event.key !== 'Tab') return
       const focusable = [...(deleteDialogRef.current?.querySelectorAll<HTMLElement>(
         'button:not(:disabled), [href], input:not(:disabled), select:not(:disabled), textarea:not(:disabled), [tabindex]:not([tabindex="-1"])',
@@ -154,27 +165,54 @@ export function ScreeningHistoryPage() {
       window.clearTimeout(focusTimer)
       window.removeEventListener('keydown', onKeyDown)
     }
-  }, [deleteTarget, deletingId])
+  }, [deleteTargets, isDeleting])
 
   function selectRecord(recordId: string) {
     void navigate({ search: { hasil: recordId }, replace: true, resetScroll: false })
   }
 
+  function toggleRecordSelection(recordId: string) {
+    setSelectedIds((current) => {
+      const next = new Set(current)
+      if (next.has(recordId)) next.delete(recordId)
+      else next.add(recordId)
+      return next
+    })
+  }
+
+  function toggleSelectAll() {
+    setSelectedIds(allRecordsSelected ? new Set<string>() : new Set(history.map((record) => record.id)))
+  }
+
   async function confirmDelete() {
-    if (!deleteTarget) return
-    setDeletingId(deleteTarget.id)
+    if (!deleteTargets.length) return
+    setIsDeleting(true)
     setError(null)
+    const deletedIds = new Set<string>()
     try {
-      await deleteAccountHistory(deleteTarget)
-      const remaining = history.filter((record) => record.id !== deleteTarget.id)
+      for (const record of deleteTargets) {
+        await deleteAccountHistory(record)
+        deletedIds.add(record.id)
+      }
+      const remaining = history.filter((record) => !deletedIds.has(record.id))
       setHistory(remaining)
+      setSelectedIds((current) => new Set([...current].filter((recordId) => !deletedIds.has(recordId))))
       const nextSelected = remaining[0] || null
       void navigate({ search: { hasil: nextSelected?.id }, replace: true, resetScroll: false })
-      setDeleteTarget(null)
+      setDeleteTargets([])
     } catch (reason) {
-      setError(reason instanceof Error ? reason.message : 'Hasil belum dapat dihapus.')
+      if (deletedIds.size) {
+        const remaining = history.filter((record) => !deletedIds.has(record.id))
+        setHistory(remaining)
+        setSelectedIds((current) => new Set([...current].filter((recordId) => !deletedIds.has(recordId))))
+        void navigate({ search: { hasil: remaining[0]?.id }, replace: true, resetScroll: false })
+        setError(`${deletedIds.size} hasil sudah dihapus. ${deleteTargets.length - deletedIds.size} hasil lainnya belum dapat dihapus.`)
+      } else {
+        setError(reason instanceof Error ? reason.message : 'Hasil belum dapat dihapus.')
+      }
+      setDeleteTargets([])
     } finally {
-      setDeletingId(null)
+      setIsDeleting(false)
     }
   }
 
@@ -203,11 +241,23 @@ export function ScreeningHistoryPage() {
           <div className="app-history-workspace">
             <section className="app-history-list" aria-label="Daftar hasil tersimpan">
               <div className="app-history-list__head">
-                <p>{history.length} hasil tersimpan</p>
+                <div>
+                  <p>{history.length} hasil tersimpan</p>
+                  <label className="app-history-list__select-all">
+                    <input ref={selectAllRef} type="checkbox" aria-label="Pilih semua hasil yang ditampilkan" checked={allRecordsSelected} onChange={toggleSelectAll} />
+                    <span>Pilih semua</span>
+                  </label>
+                </div>
                 <button type="button" aria-expanded={filtersOpen} aria-controls="history-filter" onClick={() => setFiltersOpen((current) => !current)}>
                   Filter
                 </button>
               </div>
+              {selectedRecords.length > 0 && (
+                <div className="app-history-list__selection" aria-live="polite">
+                  <span>{selectedRecords.length} hasil dipilih</span>
+                  <button className="app-text-action app-text-action--danger" type="button" onClick={() => setDeleteTargets(selectedRecords)} disabled={isDeleting}>Hapus pilihan</button>
+                </div>
+              )}
               {filtersOpen && (
                 <section className="app-history-filter app-history-filter--embedded" id="history-filter" aria-label="Filter riwayat skrining">
                   <label>
@@ -231,17 +281,23 @@ export function ScreeningHistoryPage() {
                   </label>
                 </section>
               )}
-              <div>
+              <div className="app-history-list__records">
                 {history.map((record) => (
-                  <button className={record.id === selected?.id ? 'is-selected' : ''} type="button" key={record.id} onClick={() => selectRecord(record.id)}>
-                    <span className="app-history-list__mark" aria-hidden="true">{record.source === 'upload' ? 'F' : 'C'}</span>
-                    <span>
-                      <small>{formatDate(record.created_at)} · {record.source === 'upload' ? 'Foto Anda' : 'Contoh'}</small>
-                      <strong>{record.top_prediction_label}</strong>
-                      <em>{percentage(record.predictions.find((item) => item.key === record.top_prediction_key)?.score || 0)} kemiripan pola</em>
-                    </span>
-                    <i aria-hidden="true">›</i>
-                  </button>
+                  <div className={`app-history-list__row${record.id === selected?.id ? ' is-selected' : ''}${selectedIds.has(record.id) ? ' is-checked' : ''}`} key={record.id}>
+                    <label className="app-history-list__select-record">
+                      <input type="checkbox" checked={selectedIds.has(record.id)} onChange={() => toggleRecordSelection(record.id)} />
+                      <span className="sr-only">Pilih hasil {record.top_prediction_label} dari {formatDate(record.created_at)}</span>
+                    </label>
+                    <button type="button" onClick={() => selectRecord(record.id)}>
+                      <span className="app-history-list__mark" aria-hidden="true">{record.source === 'upload' ? 'F' : 'C'}</span>
+                      <span>
+                        <small>{formatDate(record.created_at)} · {record.source === 'upload' ? 'Foto Anda' : 'Contoh'}</small>
+                        <strong>{record.top_prediction_label}</strong>
+                        <em>{percentage(record.predictions.find((item) => item.key === record.top_prediction_key)?.score || 0)} kemiripan pola</em>
+                      </span>
+                      <i aria-hidden="true">›</i>
+                    </button>
+                  </div>
                 ))}
               </div>
             </section>
@@ -258,8 +314,13 @@ export function ScreeningHistoryPage() {
                   </div>
                   <div className="app-history-detail__hero-copy">
                     <p className="app-kicker">Hasil skrining awal</p>
-                    <h2 id={`history-detail-${selected.id}`}>Pola tertinggi: {selected.top_prediction_label}</h2>
-                    <p className="app-history-detail__score">{percentage(selected.predictions.find((item) => item.key === selected.top_prediction_key)?.score || 0)} kemiripan pola</p>
+                    <h2 id={`history-detail-${selected.id}`}>Hasil skrining</h2>
+                    <p className="app-history-detail__meta">{formatDate(selected.created_at)} · {selected.source === 'upload' ? 'Foto Anda' : 'Contoh fundus'}</p>
+                    <div className="app-history-detail__indication">
+                      <p className="app-kicker">Indikasi model</p>
+                      <strong>{selected.top_prediction_label}</strong>
+                      <p className="app-history-detail__score">{percentage(selected.predictions.find((item) => item.key === selected.top_prediction_key)?.score || 0)} <span>kemiripan pola</span></p>
+                    </div>
 
                     <div className="app-history-detail__probabilities" aria-label="Seluruh kemiripan pola">
                       {selected.predictions.map((prediction) => (
@@ -274,13 +335,12 @@ export function ScreeningHistoryPage() {
                 </div>
 
                 <div className="app-history-detail__content">
-                  {selected.executive_summary && (
-                    <div className="app-history-detail__summary">
-                      <h3>{selected.executive_summary.title}</h3>
-                      <p>{selected.executive_summary.overview}</p>
-                      <p>{selected.executive_summary.next_step}</p>
-                    </div>
-                  )}
+                  <div className="app-history-detail__summary">
+                    <p className="app-kicker">Ringkasan otomatis</p>
+                    <h3>Penjelasan umum {selected.top_prediction_label}</h3>
+                    <p>{selected.executive_summary?.general_information || selected.executive_summary?.overview || `Kategori ${selected.top_prediction_label.toLowerCase()} memerlukan penilaian langsung oleh dokter mata bersama keluhan dan riwayat kesehatan.`}</p>
+                    <p className="app-history-detail__disclaimer">Bukan diagnosis medis. Konfirmasi dengan dokter mata.</p>
+                  </div>
 
                   <DiscussionKit
                     screening={screeningFromHistory(selected)}
@@ -300,11 +360,10 @@ export function ScreeningHistoryPage() {
                     showImageOptions
                     discussionQuestions={discussionQuestions}
                   />
-                  <p className="app-history-detail__note">Hasil ini adalah skrining awal dari satu foto fundus. Persentase menunjukkan kemiripan pola, bukan tingkat keparahan.</p>
                   <div className="app-history-detail__actions">
                     <Link className="app-primary-action" to="/history/$recordId/chat" params={{ recordId: selected.id }}>Mulai diskusi</Link>
-                    <button className="app-text-action app-text-action--danger" type="button" onClick={() => setDeleteTarget(selected)} disabled={deletingId === selected.id}>
-                      {deletingId === selected.id ? 'Menghapus…' : 'Hapus hasil'}
+                    <button className="app-text-action app-text-action--danger" type="button" onClick={() => setDeleteTargets([selected])} disabled={isDeleting}>
+                      {isDeleting ? 'Menghapus…' : 'Hapus hasil'}
                     </button>
                   </div>
                 </div>
@@ -315,28 +374,30 @@ export function ScreeningHistoryPage() {
 
         <Link className="app-history-page__back" to="/account"><BackArrowIcon /> Pengaturan akun</Link>
       </main>
-      {deleteTarget && (
+      {deleteTargets.length > 0 && (
         <div className="app-dialog-backdrop" role="presentation" onMouseDown={(event) => {
-          if (event.target === event.currentTarget && !deletingId) setDeleteTarget(null)
+          if (event.target === event.currentTarget && !isDeleting) setDeleteTargets([])
         }}>
-          <section ref={deleteDialogRef} className="app-dialog app-dialog--danger" role="alertdialog" aria-modal="true" aria-busy={Boolean(deletingId)} aria-labelledby="delete-history-title" aria-describedby="delete-history-description">
+          <section ref={deleteDialogRef} className="app-dialog app-dialog--danger" role="alertdialog" aria-modal="true" aria-busy={isDeleting} aria-labelledby="delete-history-title" aria-describedby="delete-history-description">
             <p className="app-kicker">Hapus data tersimpan</p>
-            <h2 id="delete-history-title">Hapus hasil skrining ini?</h2>
+            <h2 id="delete-history-title">{deleteTargets.length === 1 ? 'Hapus hasil skrining ini?' : `Hapus ${deleteTargets.length} hasil skrining?`}</h2>
             <p id="delete-history-description">Tindakan ini permanen dan tidak dapat dibatalkan.</p>
-            <div className="app-dialog__context" aria-label="Hasil yang akan dihapus">
-              <strong>{deleteTarget.top_prediction_label}</strong>
-              <span>{formatDate(deleteTarget.created_at)}</span>
-            </div>
+            {deleteTargets.length === 1 ? (
+              <div className="app-dialog__context" aria-label="Hasil yang akan dihapus">
+                <strong>{deleteTargets[0].top_prediction_label}</strong>
+                <span>{formatDate(deleteTargets[0].created_at)}</span>
+              </div>
+            ) : <p className="app-dialog__selection-summary">Semua hasil yang dipilih, termasuk percakapan dan foto privat terkait, akan dihapus.</p>}
             <p className="app-dialog__impact-label">Yang akan dihapus dari akun:</p>
             <ul className="app-dialog__impact">
-              <li>Hasil skrining dan ringkasannya</li>
-              {deleteTarget.photo_path && <li>Foto fundus privat</li>}
-              <li>Percakapan yang terkait dengan hasil ini</li>
+              <li>{deleteTargets.length === 1 ? 'Hasil skrining dan ringkasannya' : `${deleteTargets.length} hasil skrining dan ringkasannya`}</li>
+              {deleteTargets.some((record) => record.photo_path) && <li>Foto fundus privat yang terkait</li>}
+              <li>Percakapan yang terkait dengan hasil tersebut</li>
             </ul>
             <div className="app-dialog__actions app-dialog__actions--danger">
-              <button ref={cancelDeleteRef} className="app-secondary-action" type="button" onClick={() => setDeleteTarget(null)} disabled={Boolean(deletingId)}>Batal</button>
-              <button className="app-danger-action" type="button" onClick={() => { void confirmDelete() }} disabled={Boolean(deletingId)}>
-                {deletingId ? 'Menghapus…' : 'Hapus permanen'}
+              <button ref={cancelDeleteRef} className="app-secondary-action" type="button" onClick={() => setDeleteTargets([])} disabled={isDeleting}>Batal</button>
+              <button className="app-danger-action" type="button" onClick={() => { void confirmDelete() }} disabled={isDeleting}>
+                {isDeleting ? 'Menghapus…' : 'Hapus permanen'}
               </button>
             </div>
           </section>

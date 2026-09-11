@@ -11,7 +11,7 @@ export function ExecutiveSummaryCard({ screening, summary, error }: ExecutiveSum
     <section className="executive-summary" aria-live="polite" aria-labelledby={`summary-${screening.screening_id}`}>
       <div className="executive-summary__head">
         <p className="app-kicker">Ringkasan otomatis</p>
-        <h2 id={`summary-${screening.screening_id}`}>Ringkasan hasil Anda.</h2>
+        <h2 id={`summary-${screening.screening_id}`}>Yang perlu Anda pahami sekarang.</h2>
       </div>
 
       {error && (
@@ -22,28 +22,28 @@ export function ExecutiveSummaryCard({ screening, summary, error }: ExecutiveSum
 
       {summary && (
         <div className="executive-summary__body">
-          <div>
-            <p className="executive-summary__label">Gambaran awal</p>
+          <article className="executive-summary__overview">
+            <p className="executive-summary__label">Apa artinya</p>
             <h3>{summary.title}</h3>
             <p>{summary.overview}</p>
-          </div>
-          <div className="executive-summary__notes">
-            <div>
-              <p className="executive-summary__label">Tentang pola ini</p>
+          </article>
+          <aside className="executive-summary__next">
+            <p className="executive-summary__label">Langkah yang disarankan</p>
+            <p>{summary.next_step}</p>
+          </aside>
+          <div className="executive-summary__details">
+            <details>
+              <summary>Tentang pola ini</summary>
               <p>{summary.general_information}</p>
-            </div>
-            <div>
-              <p className="executive-summary__label">Faktor umum</p>
+            </details>
+            <details>
+              <summary>Faktor umum</summary>
               <p>{summary.common_factors}</p>
-            </div>
-            <div>
-              <p className="executive-summary__label">Yang dapat diperhatikan</p>
+            </details>
+            <details>
+              <summary>Hal yang dapat diperhatikan</summary>
               <p>{summary.what_to_notice}</p>
-            </div>
-            <div>
-              <p className="executive-summary__label">Langkah berikutnya</p>
-              <p>{summary.next_step}</p>
-            </div>
+            </details>
           </div>
           <p className="executive-summary__disclaimer">{summary.disclaimer}</p>
         </div>

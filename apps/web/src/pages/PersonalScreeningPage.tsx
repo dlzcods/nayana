@@ -8,7 +8,6 @@ import { ScreeningPdfAction } from '../components/ScreeningPdfAction'
 import { ScreeningSaveActions } from '../components/ScreeningSaveActions'
 import { DiscussionKit } from '../components/DiscussionKit'
 import { ResultPathway } from '../components/ResultPathway'
-import { discussionQuestionsFor } from '../lib/discussion-questions'
 import {
   getExecutiveSummary,
   getDemoCases,
@@ -228,7 +227,7 @@ export function PersonalScreeningPanel({ onProcessingChange }: PersonalScreening
         setScreeningResult(result)
         setSummary(nextSummary)
         setSummaryError(nextSummaryError)
-        setDiscussionQuestions(discussionQuestionsFor(result).map((item) => item.question))
+        setDiscussionQuestions([])
       }
     } catch (reason) {
       setError(
@@ -279,9 +278,12 @@ export function PersonalScreeningPanel({ onProcessingChange }: PersonalScreening
 
             <ExecutiveSummaryCard screening={screeningResult} summary={summary} error={summaryError} />
 
-            <ScreeningSaveActions result={screeningResult} summary={summary} normalizedImage={normalizedImage} onSaved={setSavedDestination} />
-
             <ScreeningChat screening={screeningResult} summary={summary} savedDestination={savedDestination} />
+
+            <div className="result-utilities">
+              <ScreeningSaveActions result={screeningResult} summary={summary} normalizedImage={normalizedImage} onSaved={setSavedDestination} />
+              <ScreeningPdfAction screening={screeningResult} summary={summary} discussionQuestions={discussionQuestions} />
+            </div>
 
             <DiscussionKit screening={screeningResult} selectedQuestions={discussionQuestions} onChange={setDiscussionQuestions} />
 
@@ -291,8 +293,6 @@ export function PersonalScreeningPanel({ onProcessingChange }: PersonalScreening
                 Pilih foto atau contoh lain
               </button>
             } />
-
-            <ScreeningPdfAction screening={screeningResult} summary={summary} discussionQuestions={discussionQuestions} />
 
             <p className="screening-result__disclaimer">{screeningResult.disclaimer}</p>
           </section>

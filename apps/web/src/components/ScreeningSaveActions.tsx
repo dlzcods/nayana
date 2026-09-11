@@ -56,8 +56,8 @@ export function ScreeningSaveActions({ result, summary, normalizedImage, onSaved
   return (
     <section className="screening-save" aria-labelledby={`save-${result.screening_id}`}>
       <div>
-        <p className="app-kicker">Simpan hasil</p>
-        <h2 id={`save-${result.screening_id}`}>{hasAccount ? 'Simpan ke akun Anda.' : 'Simpan sementara di browser.'}</h2>
+        <p className="app-kicker">Simpan untuk nanti</p>
+        <h2 id={`save-${result.screening_id}`}>{hasAccount ? 'Kembali ke hasil ini kapan saja.' : 'Simpan sementara di browser.'}</h2>
         <p>
           {hasAccount
             ? 'Foto yang Anda unggah disimpan privat bersama hasil. Anda dapat menghapusnya kapan saja dari akun.'
