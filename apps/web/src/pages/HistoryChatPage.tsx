@@ -227,13 +227,6 @@ export function HistoryChatPage() {
                   <p>Jawaban bersifat edukatif untuk membantu Anda memahami hasil skrining awal dan menyiapkan diskusi lanjutan.</p>
                 </div>
               </header>
-              {messages.length === 0 && !isSending && (
-                <SuggestedQuestionStarter
-                  screening={screeningFromHistory(record)}
-                  summary={record.executive_summary}
-                  onSelect={(item: SuggestedQuestion) => { void sendQuestion(item.question, item) }}
-                />
-              )}
               <div
                 className="app-history-chat__messages"
                 aria-live="polite"
@@ -248,6 +241,13 @@ export function HistoryChatPage() {
                 ))}
                 {isSending && <div className="app-chat-bubble app-chat-bubble--loading" aria-label="Menyiapkan penjelasan"><span /><span /><span /><p>Menyusun penjelasan…</p></div>}
               </div>
+              {messages.length === 0 && !isSending && (
+                <SuggestedQuestionStarter
+                  screening={screeningFromHistory(record)}
+                  summary={record.executive_summary}
+                  onSelect={(item: SuggestedQuestion) => { void sendQuestion(item.question, item) }}
+                />
+              )}
               {error && <div className="app-chat-thread__error" role="alert"><p>{error}</p>{failedQuestion && <button type="button" onClick={() => { void sendQuestion(failedQuestion, undefined, true) }}>Coba lagi</button>}</div>}
               <form className="app-history-chat__compose" onSubmit={(event) => { event.preventDefault(); void sendQuestion(draft) }}>
                 <label className="sr-only" htmlFor="history-chat-input">Tulis pertanyaan tentang hasil ini</label>

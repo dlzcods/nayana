@@ -336,7 +336,7 @@ export function ScreeningHistoryPage() {
 
                 <div className="app-history-detail__content">
                   <div className="app-history-detail__summary">
-                    <p className="app-kicker">Ringkasan otomatis</p>
+                    <p className="app-kicker">Nayana AI Summary</p>
                     <h3>Penjelasan umum {selected.top_prediction_label}</h3>
                     <p>{selected.executive_summary?.general_information || selected.executive_summary?.overview || `Kategori ${selected.top_prediction_label.toLowerCase()} memerlukan penilaian langsung oleh dokter mata bersama keluhan dan riwayat kesehatan.`}</p>
                     <p className="app-history-detail__disclaimer">Bukan diagnosis medis. Konfirmasi dengan dokter mata.</p>

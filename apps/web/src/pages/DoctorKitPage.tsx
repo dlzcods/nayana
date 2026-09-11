@@ -1,10 +1,12 @@
 import { useEffect, useState } from 'react'
 import { Link, useNavigate, useParams } from '@tanstack/react-router'
+import { BackArrowIcon } from '../components/BackArrowIcon'
 import { demoCaseImageUrl, downloadScreeningPdf, getExecutiveSummary, getScreeningResult, type ExecutiveSummary, type ScreeningResult } from '../lib/screening-api'
 import { discussionQuestionsFor } from '../lib/discussion-questions'
 import { getActiveScreening, saveActiveScreening, setActiveScreeningChatAccess } from '../lib/screening-session'
 import { getAccountScreeningByOrigin, getGuestHistory } from '../lib/screening-history'
 import { ScreeningSaveActions } from '../components/ScreeningSaveActions'
+import { SiteHeader } from '../components/SiteHeader'
 
 export function DoctorKitPage() {
   const { screeningId } = useParams({ from: '/screening/results/$screeningId/discussion' })
@@ -61,17 +63,14 @@ export function DoctorKitPage() {
     } catch (reason) { setExportState('error'); setError(reason instanceof Error ? reason.message : 'PDF belum dapat dibuat.') } finally { setExportState('idle') }
   }
 
-  return <div className="app-page"><main className="app-shell result-workspace result-workspace--compact">
-    <header className="result-document__header result-flow-shell">
-      <Link className="result-document__back" to="/screening/results/$screeningId" params={{ screeningId }}><span aria-hidden="true">‹</span><span>Hasil skrining</span></Link>
-      <span className="result-document__brand">NAYANA</span>
-    </header>
+  return <div className="app-page"><SiteHeader /><main className="app-shell result-workspace result-workspace--compact">
+    <Link className="result-document__back" to="/screening/results/$screeningId" params={{ screeningId }}><BackArrowIcon /><span>Kembali ke hasil</span></Link>
     {error && <p className="result-workspace__error" role="alert">{error}</p>}
     {screening && <section className="doctor-kit" aria-labelledby="doctor-kit-title">
       <div className="doctor-kit__intro"><p className="app-kicker">Doctor Kit</p><h1 id="doctor-kit-title">Siapkan diskusi dengan dokter</h1><p>Pilih hal yang ingin Anda tanyakan. Anda dapat membuat PDF kapan saja.</p></div>
-      <section className="doctor-kit__summary"><p className="app-kicker">Ringkasan otomatis</p><p>{summary?.general_information || summary?.overview || 'Model menemukan pola pada foto fundus yang perlu dipahami bersama keluhan, riwayat kesehatan, dan pemeriksaan langsung oleh dokter mata.'}</p><p className="doctor-kit__disclaimer">Bukan diagnosis medis. Konfirmasi dengan dokter mata.</p></section>
+      <section className="doctor-kit__summary"><p className="app-kicker">Nayana AI Summary</p><p>{summary?.general_information || summary?.overview || 'Model menemukan pola pada foto fundus yang perlu dipahami bersama keluhan, riwayat kesehatan, dan pemeriksaan langsung oleh dokter mata.'}</p><p className="doctor-kit__disclaimer">Bukan diagnosis medis. Konfirmasi dengan dokter mata.</p></section>
       <section className="doctor-kit__questions" aria-labelledby="doctor-kit-questions"><h2 id="doctor-kit-questions">Pertanyaan untuk Sp.M</h2>{discussionQuestionsFor(screening).map((item) => <label key={item.id}><input type="checkbox" checked={selected.includes(item.question)} onChange={() => setQuestions(selected.includes(item.question) ? selected.filter((question) => question !== item.question) : [...selected, item.question])} /><span>{item.question}</span></label>)}</section>
-      {!savedDestination && <ScreeningSaveActions result={screening} summary={summary} onSaved={setSavedDestination} />}
+      <ScreeningSaveActions result={screening} summary={summary} initialDestination={savedDestination} onSaved={setSavedDestination} />
       <button className={savedDestination ? 'doctor-kit__chat' : 'doctor-kit__chat is-locked'} type="button" disabled={!savedDestination} onClick={() => {
         if (!savedDestination) return
         if (savedDestination.kind === 'account') {

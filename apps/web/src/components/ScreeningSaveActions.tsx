@@ -12,10 +12,11 @@ type ScreeningSaveActionsProps = {
   result: ScreeningResult
   summary: ExecutiveSummary | null
   normalizedImage?: Blob | null
+  initialDestination?: { kind: 'account'; recordId: string } | { kind: 'browser' } | null
   onSaved?: (destination: { kind: 'account'; recordId: string } | { kind: 'browser' }) => void
 }
 
-export function ScreeningSaveActions({ result, summary, normalizedImage, onSaved }: ScreeningSaveActionsProps) {
+export function ScreeningSaveActions({ result, summary, normalizedImage, initialDestination = null, onSaved }: ScreeningSaveActionsProps) {
   const [retention, setRetention] = useState<RetentionDays>(30)
   const [state, setState] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle')
   const [message, setMessage] = useState('')
@@ -23,9 +24,14 @@ export function ScreeningSaveActions({ result, summary, normalizedImage, onSaved
   const hasAccount = Boolean(session?.userId)
 
   useEffect(() => {
+    if (initialDestination) {
+      setState('saved')
+      setMessage(initialDestination.kind === 'account' ? 'Hasil skrining sudah tersimpan di akun Anda.' : 'Hasil skrining tersimpan di browser ini selama 3 hari.')
+      return
+    }
     setState('idle')
     setMessage('')
-  }, [result.screening_id])
+  }, [initialDestination, result.screening_id])
 
   useEffect(() => {
     const syncSession = () => setSession(getAuthSession())
@@ -86,6 +92,7 @@ export function ScreeningSaveActions({ result, summary, normalizedImage, onSaved
           <Link className="app-text-action" to="/login">Masuk untuk menyimpan di akun</Link>
         </div>
       )}
+      {state === 'saved' && <p className="screening-save__success" role="status"><span aria-hidden="true">✓</span> Tersimpan</p>}
       {message && <p className={state === 'error' ? 'screening-save__message is-error' : 'screening-save__message'} role={state === 'error' ? 'alert' : undefined}>{message}</p>}
     </section>
   )

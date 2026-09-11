@@ -10,8 +10,8 @@ export function ExecutiveSummaryCard({ screening, summary, error }: ExecutiveSum
   return (
     <section className="executive-summary" aria-live="polite" aria-labelledby={`summary-${screening.screening_id}`}>
       <div className="executive-summary__head">
-        <p className="app-kicker">Ringkasan otomatis</p>
-        <h2 id={`summary-${screening.screening_id}`}>Yang perlu Anda pahami sekarang.</h2>
+        <p className="app-kicker">Nayana AI Summary</p>
+        <h2 id={`summary-${screening.screening_id}`}>Penjelasan umum {screening.top_prediction.label.toLowerCase()}.</h2>
       </div>
 
       {error && (
@@ -25,26 +25,12 @@ export function ExecutiveSummaryCard({ screening, summary, error }: ExecutiveSum
           <article className="executive-summary__overview">
             <p className="executive-summary__label">Apa artinya</p>
             <h3>{summary.title}</h3>
-            <p>{summary.overview}</p>
+            <p>{summary.general_information || summary.overview}</p>
           </article>
           <aside className="executive-summary__next">
             <p className="executive-summary__label">Langkah yang disarankan</p>
             <p>{summary.next_step}</p>
           </aside>
-          <div className="executive-summary__details">
-            <details>
-              <summary>Tentang pola ini</summary>
-              <p>{summary.general_information}</p>
-            </details>
-            <details>
-              <summary>Faktor umum</summary>
-              <p>{summary.common_factors}</p>
-            </details>
-            <details>
-              <summary>Hal yang dapat diperhatikan</summary>
-              <p>{summary.what_to_notice}</p>
-            </details>
-          </div>
           <p className="executive-summary__disclaimer">{summary.disclaimer}</p>
         </div>
       )}

@@ -2993,11 +2993,12 @@
   .result-document__intro { margin-top: 30px; }
   .result-document__intro h1,
   .doctor-kit__intro h1,
-  .model-detail__heading h1 { font-size: clamp(32px, 10vw, 42px); }
+  .model-detail__heading h1 { font-size: clamp(30px, 8vw, 38px); }
   .result-document__intro > p:last-child,
   .doctor-kit__intro > p:last-child { font-size: 13px; }
   .result-evidence { grid-template-columns: 1fr; gap: 18px; padding: 14px; border-radius: 20px; }
-  .result-evidence__image { width: min(100%, 310px); }
+  .result-evidence__image { width: 100%; }
+  .result-evidence__image figcaption { display: none; }
   .result-evidence__reading { padding: 4px 2px 6px; }
   .result-evidence__reading h2 { font-size: 28px; }
   .result-report__grid { grid-template-columns: 1fr; gap: 14px; }
@@ -3011,6 +3012,70 @@
   .model-detail__heading figure { width: 92px; }
   .model-detail__plot { margin-top: 20px; padding-inline: 16px; }
   .doctor-kit__summary, .doctor-kit__questions, .doctor-kit__chat { padding: 18px; border-radius: 19px; }
+}
+
+/* Final result-flow polish: shared navbar, compact mobile type, and deliberate
+   breathing room between the consultation sections. */
+.app-page > header + .result-document,
+.app-page > header + .result-workspace { padding-top: 30px; }
+.screening-save__success { grid-column: 1 / -1; margin: 0; color: #2f7a59; font-size: 12px; font-weight: 600; line-height: 1.4; }
+.screening-save__success span { display: inline-grid; width: 20px; height: 20px; margin-right: 6px; place-items: center; border-radius: 50%; background: #2f7a59; color: #fff; font-size: 12px; vertical-align: -5px; }
+.doctor-kit__summary,
+.doctor-kit__questions,
+.doctor-kit .screening-save,
+.doctor-kit__chat { margin-top: 28px; }
+.doctor-kit__questions { padding: 24px 26px 12px; }
+.doctor-kit__questions h2 { margin-bottom: 18px; }
+.doctor-kit__questions label { min-height: 70px; padding: 12px 0; align-items: start; }
+.doctor-kit__questions input { margin-top: 2px; }
+.doctor-kit__chat { padding: 20px 24px; border: 1px solid #e2e1dc; border-radius: 22px; background: #fff; }
+.doctor-kit__chat.is-locked { background: #fafaf8; }
+.doctor-kit__export { display: inline-flex; align-items: center; justify-content: center; gap: 6px; min-height: 44px; margin-top: 20px; padding: 0 18px; border: 1px solid #9ea3a4; border-radius: 999px; background: transparent; color: #4e5559; text-decoration: none; }
+.doctor-kit__export:hover, .doctor-kit__export:focus-visible { border-color: var(--optic-blue); color: var(--optic-blue); }
+
+/* The inline upload result follows the same report language as the dedicated
+   result route: one calm summary surface, with the short next step below it. */
+.screening-result > .executive-summary { padding: 28px 0 0; border-top: 0; border-bottom: 0; background: transparent; }
+.executive-summary__head h2 { font-size: clamp(25px, 3vw, 36px); }
+.executive-summary__body { display: block; margin-top: 18px; border: 1px solid #e2e1dc; border-radius: 22px; overflow: hidden; background: #fff; }
+.executive-summary__overview, .executive-summary__next { padding: 22px 24px; }
+.executive-summary__next { border-top: 1px solid #ecebe7; background: #fafaf8; }
+.executive-summary__disclaimer { padding: 16px 24px; border-top: 1px solid #ecebe7; font-size: 11px; }
+
+@media (max-width: 760px) {
+  .app-page > header + .result-document,
+  .app-page > header + .result-workspace { padding-top: 22px; }
+  .result-document__intro { margin-top: 24px; }
+  .result-document__intro h1,
+  .doctor-kit__intro h1,
+  .model-detail__heading h1 { font-size: clamp(30px, 7.2vw, 34px); line-height: 1.02; }
+  .result-evidence { gap: 16px; padding: 12px; }
+  .result-evidence__image { width: min(100%, 360px); margin-inline: auto; }
+  .result-evidence__reading { padding: 3px 2px 4px; }
+  .result-evidence__reading h2 { font-size: 26px; }
+  .result-report__grid { gap: 12px; }
+  .doctor-kit { margin-top: 24px; }
+  .doctor-kit__summary,
+  .doctor-kit__questions,
+  .doctor-kit__chat { margin-top: 22px; padding: 18px; border-radius: 19px; }
+  .doctor-kit__questions { padding-bottom: 8px; }
+  .doctor-kit__questions h2 { margin-bottom: 10px; font-size: 20px; }
+  .doctor-kit__questions label { min-height: 68px; gap: 12px; font-size: 14px; }
+  .doctor-kit .screening-save { margin-top: 24px; padding: 18px; border-radius: 19px; }
+  .doctor-kit__export { width: auto; margin-top: 18px; }
+  .screening-result > .executive-summary { padding-top: 22px; }
+  .executive-summary__body { border-radius: 19px; }
+  .executive-summary__overview, .executive-summary__next { padding: 18px; }
+  .executive-summary__disclaimer { padding: 14px 18px; }
+}
+
+@media (max-width: 420px) {
+  .result-document,
+  .result-workspace { width: min(calc(100% - 28px), 560px); }
+  .result-evidence__image { width: 100%; }
+  .result-evidence__reading h2 { font-size: 25px; }
+  .doctor-kit__questions label { min-height: 74px; }
+  .doctor-kit__export { width: 100%; }
 }
 
 @media (max-width: 420px) {
@@ -3094,4 +3159,33 @@
   .app-history-detail__visual { width: min(100%, 300px); }
   .discussion-kit summary { padding: 16px 18px; }
   .discussion-kit__questions { padding: 0 18px 16px; }
+}
+
+/* Suggested questions are part of the thread, not a separate grey panel. */
+.app-history-chat__starter { margin: 26px 0 0; padding: 0; border: 0; background: transparent; }
+.app-history-chat__starter-head { margin-top: 0; }
+.app-history-chat__starter-head > p { color: #62666b; font-size: 13px; line-height: 1.55; }
+.app-history-chat__starter > div:last-child { margin-top: 16px; gap: 9px; }
+.app-history-chat__starter button { min-height: 40px; padding-inline: 14px; background: transparent; }
+.app-history-chat__starter button:hover,
+.app-history-chat__starter button:focus-visible { background: #eef1fb; }
+
+@media (max-width: 620px) {
+  .app-history-chat__starter { margin-top: 22px; }
+  .app-history-chat__starter > div:last-child { gap: 8px; }
+  .app-history-chat__starter button { min-height: 42px; }
+}
+
+/* History detail uses the same full-size fundus treatment as a fresh result. */
+.app-history-detail__hero { grid-template-columns: minmax(280px, 360px) minmax(0, 1fr); gap: clamp(28px, 4vw, 44px); align-items: start; }
+.app-history-detail__visual { width: 100%; max-width: 360px; margin-inline: auto; border-radius: 18px; }
+.app-history-detail__visual img { object-fit: contain; }
+
+@media (max-width: 920px) {
+  .app-history-detail__hero { grid-template-columns: 1fr; gap: 24px; }
+  .app-history-detail__visual { width: min(100%, 420px); max-width: none; margin-inline: auto; }
+}
+
+@media (max-width: 620px) {
+  .app-history-detail__visual { width: 100%; }
 }

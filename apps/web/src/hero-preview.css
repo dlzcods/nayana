@@ -628,3 +628,15 @@
     --closing-bg-scale: 1;
   }
 }
+
+/* Result and consultation flows use the same compact shared navbar as the
+   rest of the product, with less mobile chrome so the report stays primary. */
+@media (max-width: 760px) {
+  .optic-header__inner { min-height: 56px; }
+  .optic-header .brand__image-window { width: 132px; height: 31px; }
+  .optic-header .brand__image { left: -11px; top: -26px; width: 151px; }
+}
+
+@media (max-width: 420px) {
+  .optic-header__inner { min-height: 52px; }
+}

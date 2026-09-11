@@ -130,7 +130,13 @@ export function PersonalScreeningPanel({ onProcessingChange }: PersonalScreening
     }
   }, [image])
 
+  function confirmReplacingUnsavedResult() {
+    if (!screeningResult || savedDestination) return true
+    return window.confirm('Hasil skrining ini belum disimpan. Ganti foto dan hapus hasil saat ini?')
+  }
+
   function resetScreening() {
+    if (!confirmReplacingUnsavedResult()) return
     setImage(null)
     setNormalizedImage(null)
     setSelectedDemoId('')
@@ -147,6 +153,10 @@ export function PersonalScreeningPanel({ onProcessingChange }: PersonalScreening
   }
 
   function selectFile(event: ChangeEvent<HTMLInputElement>) {
+    if (!confirmReplacingUnsavedResult()) {
+      event.target.value = ''
+      return
+    }
     const nextFile = event.target.files?.[0] || null
     setScreeningResult(null)
     setSummary(null)
@@ -178,6 +188,7 @@ export function PersonalScreeningPanel({ onProcessingChange }: PersonalScreening
   }
 
   function selectDemo(caseId: string) {
+    if (!confirmReplacingUnsavedResult()) return
     setSelectedDemoId(caseId)
     setImage(null)
     setNormalizedImage(null)

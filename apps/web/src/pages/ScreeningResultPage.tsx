@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { Link, useParams } from '@tanstack/react-router'
 import { BackArrowIcon } from '../components/BackArrowIcon'
 import { ScreeningFinalizing } from '../components/ScreeningFinalizing'
+import { SiteHeader } from '../components/SiteHeader'
 import {
   demoCaseIdFromScreeningId,
   demoCaseImageUrl,
@@ -77,6 +78,7 @@ export function ScreeningResultPage() {
 
   return (
     <div className="app-page">
+      <SiteHeader />
       <main className={`app-shell app-result result-document ${!result && !error ? 'app-result--loading' : ''}`}>
         {!result && !error && (
           <ScreeningFinalizing
@@ -101,11 +103,7 @@ export function ScreeningResultPage() {
 
         {result && (
           <section className="result-document__body" aria-labelledby="result-title">
-            <header className="result-document__header">
-              <Link className="result-document__back" to="/history" search={{ hasil: undefined }} aria-label="Kembali ke riwayat skrining"><BackArrowIcon /><span>Hasil skrining</span></Link>
-              <span className="result-document__brand">NAYANA</span>
-            </header>
-
+            <Link className="result-document__back" to="/history" search={{ hasil: undefined }} aria-label="Kembali ke riwayat skrining"><BackArrowIcon /><span>Kembali ke riwayat</span></Link>
             <div className="result-document__intro">
               <p className="app-kicker">{result.source === 'demo' ? 'Mode contoh' : 'Skrining awal'}</p>
               <h1 id="result-title">Hasil skrining Anda</h1>
@@ -115,7 +113,6 @@ export function ScreeningResultPage() {
             <section className="result-evidence" aria-labelledby="model-result-title">
               {demoCaseImageUrl(result.case_id || '') && <figure className="result-evidence__image">
                 <img src={demoCaseImageUrl(result.case_id || '')} alt="Foto fundus contoh yang dianalisis" />
-                <figcaption>Foto fundus yang dianalisis</figcaption>
               </figure>}
               <div className="result-evidence__reading">
                 <p className="app-kicker">Indikasi model</p>
@@ -141,7 +138,7 @@ export function ScreeningResultPage() {
               </section>
 
               <section className="result-report__summary" aria-live="polite" aria-labelledby="summary-title">
-                <p className="app-kicker" id="summary-title">Ringkasan otomatis</p>
+                <p className="app-kicker" id="summary-title">Nayana AI Summary</p>
                 <p className="result-report__summary-text">{summaryText}</p>
                 <p className="result-report__disclaimer">Bukan diagnosis medis. Konfirmasi dengan dokter mata.</p>
               </section>
