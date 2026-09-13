@@ -1413,7 +1413,8 @@
   }
 
   .app-screening__intro h2 {
-    font-size: 40px;
+    font-size: 32px;
+    line-height: 1.08;
   }
 
   .app-auth {
@@ -1425,7 +1426,8 @@
   }
 
   .app-auth__intro h1 {
-    font-size: 42px;
+    font-size: 34px;
+    line-height: 1.08;
   }
 
   .executive-summary {
@@ -1442,7 +1444,8 @@
   }
 
   .app-finalizing h2 {
-    font-size: 34px;
+    font-size: 28px;
+    line-height: 1.1;
   }
 
   .app-screening__intro > p:not(.app-kicker),
@@ -3188,4 +3191,71 @@
 
 @media (max-width: 620px) {
   .app-history-detail__visual { width: 100%; }
+}
+
+/* Approved action hierarchy: two visible actions, then a separated delete
+   utility. Delete is intentionally low-emphasis until the user asks for it. */
+.result-document__next-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+.result-document__next-actions .app-primary-action,
+.result-document__next-actions .app-secondary-action { min-height: 46px; margin: 0; }
+.result-document__next-actions .app-secondary-action { width: auto; padding-inline: 18px; }
+.result-document__pdf-action { display: block; }
+.result-document__pdf-action p { margin: 8px 0 0; }
+
+.app-history-detail__actions { align-items: center; gap: 10px; }
+.app-history-list__row { grid-template-columns: minmax(0, 1fr); }
+.app-history-detail__actions .screening-pdf { display: block; }
+.app-history-detail__actions .app-primary-action,
+.app-history-detail__actions .screening-pdf .app-secondary-action {
+  min-height: 46px;
+  width: auto;
+  margin: 0;
+  padding-inline: 18px;
+}
+.app-history-detail__saved { margin: 13px 0 0; color: #2f6f4b; font-size: 12px; font-weight: 600; line-height: 1.4; }
+.app-history-detail__saved span { display: inline-grid; width: 20px; height: 20px; margin-right: 6px; place-items: center; border-radius: 50%; background: #dcebdc; color: #2f6f4b; font-size: 12px; vertical-align: -5px; }
+.app-history-detail__delete-utility { margin-top: 14px; padding-top: 12px; border-top: 1px solid var(--optic-line); }
+.app-history-detail__delete-utility .app-text-action { min-height: 44px; margin: 0; padding: 0; color: #a63f34; font-size: 12px; }
+
+@media (max-width: 620px) {
+  .result-document__next-actions { align-items: stretch; flex-direction: column; }
+  .result-document__next-actions .app-primary-action,
+  .result-document__next-actions .app-secondary-action { width: 100%; }
+  .app-history-detail__actions { align-items: stretch; flex-direction: column; gap: 10px; }
+  .app-history-detail__actions .app-primary-action,
+  .app-history-detail__actions .screening-pdf,
+  .app-history-detail__actions .screening-pdf .app-secondary-action { width: 100%; }
+}
+
+/* History is a horizontal choice strip on narrow screens. The detail view
+   remains below it, so the selected result keeps the same reading order. */
+@media (max-width: 620px) {
+  .app-history-list__records { display: flex; gap: 10px; overflow-x: auto; padding: 14px 16px 18px; scroll-snap-type: x proximity; }
+  .app-history-list__row,
+  .app-history-list__row:last-child { min-width: min(78vw, 260px); border: 1px solid var(--optic-line); border-radius: 16px; scroll-snap-align: start; }
+  .app-history-list__row > button { height: 100%; grid-template-columns: 34px minmax(0, 1fr) 13px; padding: 15px 13px; }
+.app-history-list__row.is-selected > button { border-radius: 15px; }
+}
+
+/* Keep action labels on one typographic token across result, history, and
+   account flows. Native buttons otherwise fall back to the browser's 16px
+   default while links use the 13px app action scale. */
+.app-primary-action,
+.app-google-action,
+.app-secondary-action {
+  font-family: inherit;
+  font-size: 13px;
+  line-height: 1.2;
+}
+.result-document__next-actions .app-secondary-action,
+.app-history-detail__actions .app-secondary-action,
+.app-history-detail__pdf .app-secondary-action {
+  font-size: 13px;
+  line-height: 1.2;
 }

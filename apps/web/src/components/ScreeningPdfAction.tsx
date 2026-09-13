@@ -79,30 +79,28 @@ export function ScreeningPdfAction({
     }
   }
 
+  const imageOptions = imageUrl ? (
+    <>
+      <label className="screening-pdf__include">
+        <input type="checkbox" checked={includeImage} onChange={(event) => setIncludeImage(event.target.checked)} />
+        <span>
+          <strong>Sertakan foto fundus pada PDF</strong>
+          <small>Foto dikirim kembali hanya untuk dibuat sebagai lampiran PDF yang Anda unduh.</small>
+        </span>
+      </label>
+      <button className="app-text-action" type="button" onClick={() => { void downloadImage() }} disabled={imageState === 'loading'}>
+        {imageState === 'loading' ? 'Menyiapkan foto…' : imageDownloadLabel}
+      </button>
+    </>
+  ) : <p className="screening-pdf__unavailable">Foto tidak tersimpan atau belum dapat dimuat, sehingga PDF dibuat tanpa lampiran foto.</p>
+
   return (
     <div className={['screening-pdf', className].filter(Boolean).join(' ')}>
       {showImageOptions && (
-        <div className="screening-pdf__options">
-          {imageUrl ? (
-            <>
-          <label className="screening-pdf__include">
-            <input type="checkbox" checked={includeImage} onChange={(event) => setIncludeImage(event.target.checked)} />
-            <span>
-              <strong>Sertakan foto fundus pada PDF</strong>
-              <small>Foto dikirim kembali hanya untuk dibuat sebagai lampiran PDF yang Anda unduh.</small>
-            </span>
-          </label>
-          <button className="app-text-action" type="button" onClick={() => { void downloadImage() }} disabled={imageState === 'loading'}>
-            {imageState === 'loading' ? 'Menyiapkan foto…' : imageDownloadLabel}
-          </button>
-            </>
-          ) : (
-            <p className="screening-pdf__unavailable">Foto tidak tersimpan atau belum dapat dimuat, sehingga PDF dibuat tanpa lampiran foto.</p>
-          )}
-        </div>
+        <div className="screening-pdf__options">{imageOptions}</div>
       )}
       <button className="app-secondary-action" type="button" onClick={() => { void download() }} disabled={state === 'loading'}>
-        {state === 'loading' ? 'Menyiapkan PDF…' : 'Unduh ringkasan PDF'}
+        {state === 'loading' ? 'Menyiapkan PDF…' : 'Export PDF'}
       </button>
       {error && <p role="alert">{error}</p>}
     </div>

@@ -357,7 +357,7 @@ h1, h2, h3 { font-family: 'IBM Plex Sans', Arial, sans-serif; font-weight: 500; 
   .site-footer__bottom { padding-block: 20px; align-items: flex-start; flex-direction: column; justify-content: center; }
   .document { padding-block: 56px 90px; }
   .document__back { margin-bottom: 50px; }
-  .document h1 { font-size: 49px; }
+  .document h1 { font-size: 34px; line-height: 1.08; }
   .document__lead { margin-bottom: 60px; font-size: 15px; }
   .evidence-table div { grid-template-columns: 1fr; gap: 6px; }
   .evidence-table dd { text-align: left; }

@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { Link, useParams } from '@tanstack/react-router'
 import { BackArrowIcon } from '../components/BackArrowIcon'
 import { ScreeningFinalizing } from '../components/ScreeningFinalizing'
+import { ScreeningPdfAction } from '../components/ScreeningPdfAction'
 import { SiteHeader } from '../components/SiteHeader'
 import {
   demoCaseIdFromScreeningId,
@@ -146,7 +147,15 @@ export function ScreeningResultPage() {
 
             <section className="result-document__next">
               <div><p className="app-kicker">Jika Anda ingin lanjut</p><h2>Siapkan bahan diskusi dengan dokter.</h2><p className="result-document__next-copy">Pilih pertanyaan yang ingin dibawa. PDF hanya dibuat saat Anda memintanya.</p></div>
-              <Link className="app-primary-action" to="/screening/results/$screeningId/discussion" params={{ screeningId }}>Buka Doctor Kit</Link>
+              <div className="result-document__next-actions">
+                <Link className="app-primary-action" to="/screening/results/$screeningId/discussion" params={{ screeningId }}>Buka Doctor Kit</Link>
+                <ScreeningPdfAction
+                  className="result-document__pdf-action"
+                  screening={result}
+                  summary={summary}
+                  imageUrl={demoCaseImageUrl(result.case_id || '') || null}
+                />
+              </div>
             </section>
           </section>
         )}

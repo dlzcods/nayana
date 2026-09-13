@@ -1,6 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { Link, useNavigate, useSearch } from '@tanstack/react-router'
-import { SiteFooter } from '../components/SiteFooter'
 import { SiteHeader } from '../components/SiteHeader'
 import { BackArrowIcon } from '../components/BackArrowIcon'
 import { ScreeningPdfAction } from '../components/ScreeningPdfAction'
@@ -171,15 +170,6 @@ export function ScreeningHistoryPage() {
     void navigate({ search: { hasil: recordId }, replace: true, resetScroll: false })
   }
 
-  function toggleRecordSelection(recordId: string) {
-    setSelectedIds((current) => {
-      const next = new Set(current)
-      if (next.has(recordId)) next.delete(recordId)
-      else next.add(recordId)
-      return next
-    })
-  }
-
   function toggleSelectAll() {
     setSelectedIds(allRecordsSelected ? new Set<string>() : new Set(history.map((record) => record.id)))
   }
@@ -284,10 +274,6 @@ export function ScreeningHistoryPage() {
               <div className="app-history-list__records">
                 {history.map((record) => (
                   <div className={`app-history-list__row${record.id === selected?.id ? ' is-selected' : ''}${selectedIds.has(record.id) ? ' is-checked' : ''}`} key={record.id}>
-                    <label className="app-history-list__select-record">
-                      <input type="checkbox" checked={selectedIds.has(record.id)} onChange={() => toggleRecordSelection(record.id)} />
-                      <span className="sr-only">Pilih hasil {record.top_prediction_label} dari {formatDate(record.created_at)}</span>
-                    </label>
                     <button type="button" onClick={() => selectRecord(record.id)}>
                       <span className="app-history-list__mark" aria-hidden="true">{record.source === 'upload' ? 'F' : 'C'}</span>
                       <span>
@@ -348,20 +334,22 @@ export function ScreeningHistoryPage() {
                     onChange={setDiscussionQuestions}
                   />
 
-                  <ScreeningPdfAction
-                    className="app-history-detail__pdf"
-                    screening={screeningFromHistory(selected)}
-                    summary={selected.executive_summary}
-                    imageUrl={selectedPhotoUrl || selectedDemoImageUrl || null}
-                    imageDownloadName={selected.source === 'upload'
-                      ? 'nayana-foto-fundus-' + selected.id + '.jpg'
-                      : 'nayana-gambar-contoh-' + selected.id + (selectedDemoImageUrl.endsWith('.jpg') ? '.jpg' : '.png')}
-                    imageDownloadLabel={selected.source === 'upload' ? 'Unduh foto fundus (JPEG)' : 'Unduh gambar contoh'}
-                    showImageOptions
-                    discussionQuestions={discussionQuestions}
-                  />
                   <div className="app-history-detail__actions">
                     <Link className="app-primary-action" to="/history/$recordId/chat" params={{ recordId: selected.id }}>Mulai diskusi</Link>
+                    <ScreeningPdfAction
+                      className="app-history-detail__pdf-action"
+                      screening={screeningFromHistory(selected)}
+                      summary={selected.executive_summary}
+                      imageUrl={selectedPhotoUrl || selectedDemoImageUrl || null}
+                      imageDownloadName={selected.source === 'upload'
+                        ? 'nayana-foto-fundus-' + selected.id + '.jpg'
+                        : 'nayana-gambar-contoh-' + selected.id + (selectedDemoImageUrl.endsWith('.jpg') ? '.jpg' : '.png')}
+                      imageDownloadLabel={selected.source === 'upload' ? 'Unduh foto fundus (JPEG)' : 'Unduh gambar contoh'}
+                      discussionQuestions={discussionQuestions}
+                    />
+                  </div>
+                  <p className="app-history-detail__saved" role="status"><span aria-hidden="true">✓</span> Hasil tersimpan di akun Anda</p>
+                  <div className="app-history-detail__delete-utility">
                     <button className="app-text-action app-text-action--danger" type="button" onClick={() => setDeleteTargets([selected])} disabled={isDeleting}>
                       {isDeleting ? 'Menghapus…' : 'Hapus hasil'}
                     </button>
@@ -403,7 +391,6 @@ export function ScreeningHistoryPage() {
           </section>
         </div>
       )}
-      <SiteFooter />
     </div>
   )
 }
