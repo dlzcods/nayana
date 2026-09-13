@@ -19,6 +19,7 @@ import { AccountPage } from './pages/AccountPage'
 import { ScreeningChatPage } from './pages/ScreeningChatPage'
 import { HistoryChatPage } from './pages/HistoryChatPage'
 import { ScreeningHistoryPage } from './pages/ScreeningHistoryPage'
+import { LocalHistoryPage } from './pages/LocalHistoryPage'
 import './styles.css'
 
 const rootRoute = createRootRoute({
@@ -98,6 +99,12 @@ const historyRoute = createRoute({
   component: ScreeningHistoryPage,
 })
 
+const localHistoryRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: '/history-local',
+  component: LocalHistoryPage,
+})
+
 const historyChatRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: '/history/$recordId/chat',
@@ -114,6 +121,7 @@ const routeTree = rootRoute.addChildren([
   loginRoute,
   accountRoute,
   historyRoute,
+  localHistoryRoute,
   historyChatRoute,
   modelDetailRoute,
   doctorKitRoute,

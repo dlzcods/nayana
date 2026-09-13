@@ -209,16 +209,19 @@ app = FastAPI(
 
 default_web_origins = (
     "http://localhost:5173,http://localhost:5174,"
+    "http://127.0.0.1:5173,http://127.0.0.1:5174,"
     "https://nayana.dielz032.workers.dev"
 )
-allowed_origins = [
+configured_web_origins = os.getenv("NAYANA_WEB_ORIGINS", "")
+allowed_origins = list(dict.fromkeys(
     origin.strip()
-    for origin in os.getenv("NAYANA_WEB_ORIGINS", default_web_origins).split(",")
+    for origin in [*default_web_origins.split(","), *configured_web_origins.split(",")]
     if origin.strip()
-]
+))
 app.add_middleware(
     CORSMiddleware,
     allow_origins=allowed_origins,
+    allow_origin_regex=r"^https?://(?:localhost|127\.0\.0\.1)(?::(?:5173|5174))?$",
     allow_credentials=False,
     allow_methods=["GET", "POST"],
     allow_headers=["Content-Type"],

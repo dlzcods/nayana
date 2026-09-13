@@ -19,6 +19,7 @@ export function saveSessionChat(screeningId: string, messages: ScreeningChatMess
 export type ActiveScreening = {
   screening: ScreeningResult
   summary: ExecutiveSummary | null
+  savedDestination?: { kind: 'account'; recordId: string } | { kind: 'browser' }
   chatAccess?: 'temporary' | 'saved'
   discussionQuestions?: string[]
 }

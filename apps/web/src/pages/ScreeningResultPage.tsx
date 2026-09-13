@@ -13,6 +13,8 @@ import {
   type ScreeningResult,
 } from '../lib/screening-api'
 import { getActiveScreening, saveActiveScreening } from '../lib/screening-session'
+import { getAuthSession } from '../lib/supabase-auth'
+import { getGuestHistory } from '../lib/screening-history'
 
 export function ScreeningResultPage() {
   const { screeningId } = useParams({ from: '/screening/results/$screeningId' })
@@ -21,6 +23,8 @@ export function ScreeningResultPage() {
   const [summary, setSummary] = useState<ExecutiveSummary | null>(null)
   const [summaryError, setSummaryError] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
+  const [isSaved, setIsSaved] = useState(false)
+  const [leaveWarning, setLeaveWarning] = useState(false)
 
   useEffect(() => {
     let active = true
@@ -30,6 +34,8 @@ export function ScreeningResultPage() {
     setSummary(null)
     setSummaryError(null)
     setError(null)
+    setIsSaved(false)
+    setLeaveWarning(false)
 
     void (async () => {
       const cached = getActiveScreening(screeningId)
@@ -37,6 +43,7 @@ export function ScreeningResultPage() {
         if (active) {
           setResult(cached.screening)
           setSummary(cached.summary)
+          setIsSaved(Boolean(cached.savedDestination) || getGuestHistory().some((item) => item.result.screening_id === screeningId))
         }
         return
       }
@@ -59,6 +66,7 @@ export function ScreeningResultPage() {
           setSummary(nextSummary)
           setSummaryError(nextSummaryError)
           saveActiveScreening({ screening: response, summary: nextSummary })
+          setIsSaved(getGuestHistory().some((item) => item.result.screening_id === screeningId))
         }
       } catch (reason) {
         if (active) setError(reason instanceof Error ? reason.message : 'Hasil demo belum tersedia.')
@@ -76,6 +84,13 @@ export function ScreeningResultPage() {
         ? `Model menemukan pola pada foto fundus yang paling mirip dengan kategori ${result.top_prediction.label.toLowerCase()}. Kategori ini perlu dipahami bersama keluhan, riwayat kesehatan, dan pemeriksaan langsung oleh dokter mata.`
         : 'Ringkasan sedang disiapkan dari hasil model.'
     : ''
+
+  const leavePath = getAuthSession() ? '/history' : '/history-local'
+
+  function requestBack() {
+    if (isSaved) return
+    setLeaveWarning(true)
+  }
 
   return (
     <div className="app-page">
@@ -104,7 +119,11 @@ export function ScreeningResultPage() {
 
         {result && (
           <section className="result-document__body" aria-labelledby="result-title">
-            <Link className="result-document__back" to="/history" search={{ hasil: undefined }} aria-label="Kembali ke riwayat skrining"><BackArrowIcon /><span>Kembali ke riwayat</span></Link>
+            {isSaved ? (
+              <Link className="result-document__back" to={getAuthSession() ? '/history' : '/history-local'} search={getAuthSession() ? { hasil: undefined } : undefined} aria-label="Kembali ke riwayat skrining"><BackArrowIcon /><span>Kembali ke riwayat</span></Link>
+            ) : (
+              <button className="result-document__back result-document__back--button" type="button" onClick={requestBack} aria-label="Kembali ke riwayat skrining"><BackArrowIcon /><span>Kembali ke riwayat</span></button>
+            )}
             <div className="result-document__intro">
               <p className="app-kicker">{result.source === 'demo' ? 'Mode contoh' : 'Skrining awal'}</p>
               <h1 id="result-title">Hasil skrining Anda</h1>
@@ -160,6 +179,22 @@ export function ScreeningResultPage() {
           </section>
         )}
       </main>
+      {leaveWarning && result && (
+        <div className="app-dialog-backdrop" role="presentation" onMouseDown={(event) => {
+          if (event.target === event.currentTarget) setLeaveWarning(false)
+        }}>
+          <section className="app-dialog app-dialog--leave" role="dialog" aria-modal="true" aria-labelledby="leave-result-title" aria-describedby="leave-result-description">
+            <p className="app-kicker">Hasil belum tersimpan</p>
+            <h2 id="leave-result-title">Simpan hasil sebelum kembali?</h2>
+            <p id="leave-result-description">Hasil ini masih berada di sesi skrining. Jika Anda keluar sekarang, hasil tersebut dapat hilang.</p>
+            <div className="app-dialog__actions app-dialog__actions--leave">
+              <Link className="app-primary-action" to="/screening/results/$screeningId/discussion" params={{ screeningId }} onClick={() => setLeaveWarning(false)}>Buka Doctor Kit</Link>
+              <button className="app-secondary-action" type="button" onClick={() => window.location.assign(leavePath)}>Tetap keluar</button>
+              <button className="app-text-action" type="button" onClick={() => setLeaveWarning(false)}>Batal</button>
+            </div>
+          </section>
+        </div>
+      )}
     </div>
   )
 }

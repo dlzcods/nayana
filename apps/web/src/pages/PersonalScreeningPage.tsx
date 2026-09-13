@@ -368,7 +368,6 @@ export function PersonalScreeningPanel({ onProcessingChange }: PersonalScreening
                   </button>
                 ))}
               </div>
-              <p className="demo-picker__flow" aria-label="Alur mode contoh">Pilih contoh → lihat hasil → baca ringkasan → siapkan diskusi → unduh PDF</p>
               {selectedDemo && <p className="demo-picker__selected">{selectedDemo.title} dipilih untuk mode contoh.</p>}
             </section>
 

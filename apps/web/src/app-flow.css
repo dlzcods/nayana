@@ -780,8 +780,6 @@
   line-height: 1.5;
 }
 
-.demo-picker__flow { margin: 15px 0 0; color: var(--optic-blue); font-size: 10px; font-weight: 600; letter-spacing: .05em; text-transform: uppercase; }
-
 .upload-consents.is-exempt .upload-check {
   color: #96979c;
 }
@@ -927,6 +925,7 @@
 .result-document__body { max-width: 1180px; margin-inline: auto; }
 .result-document__header { min-height: 34px; display: flex; align-items: center; justify-content: space-between; }
 .result-document__back { min-height: 44px; margin-block: -5px; display: inline-flex; align-items: center; gap: 8px; color: var(--optic-ink); font-size: 12px; font-weight: 600; }
+.result-document__back--button { padding: 0; border: 0; background: transparent; font: inherit; cursor: pointer; }
 .result-document__back svg { width: 14px; height: 14px; }
 .result-document__brand { color: #5e6268; font-size: 10px; font-weight: 700; letter-spacing: .2em; }
 
@@ -2456,6 +2455,7 @@
   width: min(100%, 510px);
   padding: clamp(26px, 4vw, 38px);
   border: 1px solid var(--optic-line);
+  border-radius: 22px;
   background: #f7f7f5;
   box-shadow: 0 20px 56px rgba(24, 25, 30, .18);
 }
@@ -2507,6 +2507,7 @@
 .app-dialog__impact li::before { position: absolute; left: 1px; color: #a63f34; content: '•'; }
 .app-dialog__actions--danger { justify-content: flex-end; }
 .app-dialog__actions--danger .app-secondary-action { width: auto; min-height: 48px; padding-inline: 20px; }
+.app-dialog__actions--leave .app-secondary-action { width: auto; min-height: 48px; padding-inline: 20px; }
 .app-danger-action {
   min-height: 48px;
   padding: 0 22px;
@@ -2525,6 +2526,7 @@
 
 @media (max-width: 620px) {
   .app-dialog-backdrop { padding: 16px; }
+  .app-dialog { border-radius: 18px; }
   .app-dialog__actions { align-items: stretch; flex-direction: column; gap: 14px; }
   .app-dialog__actions .app-primary-action { width: 100%; }
   .app-dialog__actions--danger { flex-direction: column-reverse; }
@@ -3258,4 +3260,400 @@
 .app-history-detail__pdf .app-secondary-action {
   font-size: 13px;
   line-height: 1.2;
+}
+
+/* Login surface refinement: keep the optional sign-in flow quiet while giving
+   the one meaningful action a clear, shared primary treatment. */
+.app-auth {
+  gap: clamp(56px, 8vw, 128px);
+}
+
+.app-auth__panel {
+  padding: clamp(28px, 3vw, 36px);
+  border-radius: 22px;
+  background: #f1f0ec;
+}
+
+.app-auth__panel h2 {
+  max-width: 19ch;
+  line-height: 1.14;
+}
+
+.app-auth__panel p {
+  margin-top: 14px;
+}
+
+.app-auth__panel .app-google-action,
+.app-auth__panel .app-secondary-action {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 48px;
+  margin-top: 24px;
+  padding-inline: 20px;
+  transition: background 180ms ease, color 180ms ease, border-color 180ms ease, opacity 180ms ease;
+}
+
+.app-auth__panel .app-google-action {
+  border-color: var(--optic-ink);
+  background: var(--optic-ink);
+  color: #f7f7f5;
+}
+
+.app-auth__panel .app-google-action:hover,
+.app-auth__panel .app-google-action:focus-visible {
+  border-color: #3b3c42;
+  background: #3b3c42;
+}
+
+.app-auth__panel .app-google-action:disabled {
+  opacity: .62;
+  cursor: wait;
+}
+
+.app-auth__panel .app-secondary-action:hover,
+.app-auth__panel .app-secondary-action:focus-visible {
+  background: var(--optic-ink);
+  color: #f7f7f5;
+}
+
+.app-auth__panel > .app-text-action {
+  margin-top: 20px;
+  line-height: 1.4;
+}
+
+@media (max-width: 920px) {
+  .app-auth {
+    gap: 38px;
+  }
+}
+
+@media (max-width: 560px) {
+  .app-auth {
+    gap: 34px;
+    padding-block: 48px 72px;
+  }
+
+  .app-auth__intro > p:last-child {
+    margin-top: 22px;
+    line-height: 1.58;
+  }
+
+  .app-auth__panel {
+    padding: 26px 22px 24px;
+    border-radius: 20px;
+  }
+
+  .app-auth__panel h2 {
+    max-width: none;
+    font-size: 25px;
+  }
+
+  .app-auth__panel p {
+    margin-top: 12px;
+  }
+
+  .app-auth__panel .app-google-action,
+  .app-auth__panel .app-secondary-action {
+    margin-top: 22px;
+  }
+}
+
+/* Guest history is deliberately a quiet utility surface. It shares the
+   product type scale with account history without changing the navbar. */
+.app-local-history {
+  width: min(calc(100% - 96px), 1040px);
+  padding-block: 24px 64px;
+}
+
+.app-local-history__back {
+  display: inline-flex;
+  align-items: center;
+  gap: 9px;
+  color: #53545a;
+  font-size: 12px;
+  font-weight: 600;
+  text-decoration: none;
+}
+
+.app-local-history__back:hover,
+.app-local-history__back:focus-visible {
+  color: var(--optic-blue);
+}
+
+.app-local-history__intro {
+  max-width: 680px;
+  margin-top: 42px;
+}
+
+.app-local-history__intro h1 {
+  max-width: 620px;
+  margin: 14px 0 0;
+  color: var(--optic-ink);
+  font-size: clamp(36px, 4.2vw, 52px);
+  font-weight: 500;
+  line-height: 1.02;
+  letter-spacing: -.055em;
+}
+
+.app-local-history__intro > p:last-child {
+  max-width: 560px;
+  margin: 18px 0 0;
+  color: #616268;
+  font-size: 15px;
+  line-height: 1.6;
+}
+
+.app-local-history__workspace {
+  margin-top: 34px;
+  display: grid;
+  grid-template-columns: minmax(0, .86fr) minmax(0, 1.14fr);
+  gap: 16px;
+  align-items: start;
+}
+
+.app-local-history__list {
+  min-width: 0;
+  display: grid;
+  gap: 12px;
+}
+
+.app-local-history__row {
+  width: 100%;
+  min-width: 0;
+  padding: 18px 20px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  border: 1px solid var(--optic-line);
+  border-radius: 18px;
+  background: #fbfbf9;
+  color: inherit;
+  text-align: left;
+  font: inherit;
+  cursor: pointer;
+  transition: border-color 180ms ease, background 180ms ease;
+}
+
+.app-local-history__row:hover,
+.app-local-history__row:focus-visible {
+  border-color: var(--optic-blue);
+  background: #f5f7ff;
+  outline: 0;
+}
+
+.app-local-history__row.is-selected {
+  border-color: var(--optic-blue);
+  background: #edf1fe;
+}
+
+.app-local-history__row > span {
+  min-width: 0;
+  display: grid;
+  gap: 5px;
+}
+
+.app-local-history__row small {
+  color: #6b6c72;
+  font-size: 11px;
+}
+
+.app-local-history__row strong {
+  overflow: hidden;
+  color: var(--optic-ink);
+  font-size: 15px;
+  font-weight: 600;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.app-local-history__row em {
+  color: var(--optic-blue);
+  font-size: 11px;
+  font-style: normal;
+}
+
+.app-local-history__row i {
+  color: var(--optic-ink);
+  font-size: 26px;
+  font-style: normal;
+  line-height: 1;
+}
+
+.app-local-history__detail {
+  min-width: 0;
+  padding: 26px 28px 28px;
+  border: 1px solid var(--optic-line);
+  border-radius: 18px;
+  background: #f1f0ec;
+}
+
+.app-local-history__detail h2 {
+  margin: 12px 0 0;
+  color: var(--optic-ink);
+  font-size: 30px;
+  font-weight: 500;
+  line-height: 1.08;
+  letter-spacing: -.045em;
+}
+
+.app-local-history__detail > p:not(.app-kicker):not(.app-local-history__score):not(.app-local-history__disclaimer) {
+  margin: 18px 0 0;
+  color: #4f5559;
+  font-size: 15px;
+  line-height: 1.65;
+}
+
+.app-local-history__score {
+  margin: 16px 0 0;
+  color: var(--optic-blue);
+  font-size: 29px;
+  font-weight: 600;
+}
+
+.app-local-history__score span {
+  color: #62636a;
+  font-size: 13px;
+  font-weight: 400;
+}
+
+.app-local-history__disclaimer {
+  margin: 22px 0 0;
+  color: #6a6b71;
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.app-local-history__account-note {
+  margin-top: 30px;
+  padding-top: 22px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 22px;
+  border-top: 1px solid var(--optic-line);
+}
+
+.app-local-history__account-note p {
+  max-width: 560px;
+  margin: 0;
+  color: #62636a;
+  font-size: 13px;
+  line-height: 1.55;
+}
+
+.app-local-history__account-note .app-secondary-action {
+  width: auto;
+  min-height: 46px;
+  flex: 0 0 auto;
+  padding-inline: 20px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  white-space: nowrap;
+}
+
+.app-local-history__empty {
+  max-width: 680px;
+  margin-top: 34px;
+  padding: 26px 0;
+  border-top: 1px solid var(--optic-line);
+  border-bottom: 1px solid var(--optic-line);
+}
+
+.app-local-history__empty h2 {
+  margin: 12px 0 0;
+  color: var(--optic-ink);
+  font-size: 28px;
+  font-weight: 500;
+  line-height: 1.1;
+  letter-spacing: -.04em;
+}
+
+.app-local-history__empty .app-primary-action {
+  margin-top: 22px;
+}
+
+.app-screening__local-history {
+  display: inline-flex;
+  margin-top: 18px;
+  color: var(--optic-blue);
+  font-size: 13px;
+  font-weight: 600;
+  text-decoration: none;
+}
+
+.app-screening__local-history:hover,
+.app-screening__local-history:focus-visible {
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+@media (max-width: 920px) {
+  .app-local-history {
+    width: min(calc(100% - 56px), 760px);
+  }
+
+  .app-local-history__workspace {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 620px) {
+  .app-local-history {
+    width: min(calc(100% - 32px), 520px);
+    padding-block: 34px 56px;
+  }
+
+  .app-local-history__intro {
+    margin-top: 34px;
+  }
+
+  .app-local-history__intro h1 {
+    font-size: 32px;
+    line-height: 1.06;
+  }
+
+  .app-local-history__intro > p:last-child {
+    margin-top: 16px;
+    font-size: 14px;
+  }
+
+  .app-local-history__workspace {
+    margin-top: 26px;
+    gap: 14px;
+  }
+
+  .app-local-history__row {
+    padding: 16px 17px;
+    border-radius: 16px;
+  }
+
+  .app-local-history__row strong {
+    font-size: 14px;
+  }
+
+  .app-local-history__detail {
+    padding: 22px 20px 24px;
+    border-radius: 16px;
+  }
+
+  .app-local-history__detail h2 {
+    font-size: 27px;
+  }
+
+  .app-local-history__account-note {
+    margin-top: 26px;
+    padding-top: 20px;
+    align-items: flex-start;
+    flex-direction: column;
+    gap: 14px;
+  }
+
+  .app-local-history__account-note .app-secondary-action {
+    width: auto;
+    max-width: 100%;
+    white-space: normal;
+  }
 }

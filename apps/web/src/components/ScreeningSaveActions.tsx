@@ -7,6 +7,7 @@ import {
 } from '../lib/screening-history'
 import { authChangeEvent, getAuthSession, type AuthSession } from '../lib/supabase-auth'
 import { type ExecutiveSummary, type ScreeningResult } from '../lib/screening-api'
+import { getActiveScreening, saveActiveScreening } from '../lib/screening-session'
 
 type ScreeningSaveActionsProps = {
   result: ScreeningResult
@@ -27,6 +28,8 @@ export function ScreeningSaveActions({ result, summary, normalizedImage, initial
     if (initialDestination) {
       setState('saved')
       setMessage(initialDestination.kind === 'account' ? 'Hasil skrining sudah tersimpan di akun Anda.' : 'Hasil skrining tersimpan di browser ini selama 3 hari.')
+      const active = getActiveScreening(result.screening_id)
+      if (active && !active.savedDestination) saveActiveScreening({ ...active, savedDestination: initialDestination })
       return
     }
     setState('idle')
@@ -46,11 +49,17 @@ export function ScreeningSaveActions({ result, summary, normalizedImage, initial
       if (hasAccount) {
         const saved = await saveAccountScreening({ result, summary, retentionDays: retention, normalizedImage })
         setMessage(saved.wasExisting ? 'Hasil ini sudah ada di riwayat akun Anda.' : `Hasil disimpan di akun selama ${retention} hari.`)
-        onSaved?.({ kind: 'account', recordId: saved.record.id })
+        const destination = { kind: 'account' as const, recordId: saved.record.id }
+        const active = getActiveScreening(result.screening_id)
+        if (active) saveActiveScreening({ ...active, savedDestination: destination })
+        onSaved?.(destination)
       } else {
         saveGuestHistory(result, summary)
         setMessage('Hasil disimpan di browser ini selama 3 hari. Foto tidak disimpan.')
-        onSaved?.({ kind: 'browser' })
+        const destination = { kind: 'browser' as const }
+        const active = getActiveScreening(result.screening_id)
+        if (active) saveActiveScreening({ ...active, savedDestination: destination })
+        onSaved?.(destination)
       }
       setState('saved')
     } catch (reason) {
@@ -89,6 +98,7 @@ export function ScreeningSaveActions({ result, summary, normalizedImage, initial
           <button className="app-primary-action" type="button" onClick={() => { void save() }} disabled={state === 'saving' || state === 'saved'}>
             {state === 'saving' ? 'Menyimpan…' : state === 'saved' ? 'Tersimpan 3 hari' : 'Simpan 3 hari'}
           </button>
+          {state === 'saved' && <Link className="app-text-action" to="/history-local">Lihat hasil tersimpan di perangkat</Link>}
           <Link className="app-text-action" to="/login">Masuk untuk menyimpan di akun</Link>
         </div>
       )}

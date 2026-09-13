@@ -3,6 +3,8 @@ import { SiteFooter } from '../components/SiteFooter'
 import { SiteHeader } from '../components/SiteHeader'
 import { PersonalScreeningPanel } from './PersonalScreeningPage'
 import { getAuthSession, type AuthSession } from '../lib/supabase-auth'
+import { getGuestHistory } from '../lib/screening-history'
+import { Link } from '@tanstack/react-router'
 
 function firstName(name: string | null) {
   return name?.trim().split(/\s+/)[0] || 'Anda'
@@ -15,6 +17,7 @@ export function ScreeningPage() {
     const isWelcome = new URLSearchParams(window.location.search).get('welcome') === '1'
     return isWelcome ? getAuthSession() : null
   })
+  const [localHistoryCount] = useState(() => getGuestHistory().length)
 
   useEffect(() => {
     if (!welcomeSession || welcomeHandled.current) return
@@ -35,6 +38,11 @@ export function ScreeningPage() {
                 Unggah foto fundus Anda, atau pilih contoh untuk melihat alurnya. Hasil skrining menunjukkan
                 kemiripan pola dari model, bukan penetapan kondisi medis.
               </p>
+              {localHistoryCount > 0 && (
+                <Link className="app-screening__local-history" to="/history-local">
+                  Lihat {localHistoryCount} hasil tersimpan di perangkat
+                </Link>
+              )}
             </section>
 
             {welcomeSession && (

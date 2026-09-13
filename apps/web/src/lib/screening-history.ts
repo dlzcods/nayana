@@ -7,7 +7,7 @@ import {
 } from './supabase-auth'
 
 const guestHistoryKey = 'nayana.guest.screening-history'
-const guestHistoryLifetime = 3 * 24 * 60 * 60 * 1000
+export const guestHistoryLifetime = 3 * 24 * 60 * 60 * 1000
 const privateBucket = 'fundus-private'
 
 export type RetentionDays = 30 | 90
