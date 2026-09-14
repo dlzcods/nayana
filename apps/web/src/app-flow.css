@@ -3322,6 +3322,31 @@
   line-height: 1.4;
 }
 
+/* Shared surface edges: gray cards use the same quiet radius across the
+   upload, chat, and fallback states. Full-width divider bands stay flat. */
+.upload-file,
+.app-message,
+.app-empty {
+  border-radius: 18px;
+  overflow: hidden;
+}
+
+.upload-preview img,
+.demo-carousel button {
+  border-radius: 14px;
+}
+
+.app-history-filter:not(.app-history-filter--embedded) {
+  border-radius: 18px;
+  overflow: hidden;
+}
+
+@media (max-width: 920px) {
+  .app-history-chat__overview-toggle {
+    border-radius: 14px;
+  }
+}
+
 @media (max-width: 920px) {
   .app-auth {
     gap: 38px;
