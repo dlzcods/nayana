@@ -3,6 +3,8 @@ import { Link } from '@tanstack/react-router'
 import {
   saveAccountScreening,
   saveGuestHistory,
+  updateAccountScreeningSummary,
+  updateGuestHistorySummary,
   type RetentionDays,
 } from '../lib/screening-history'
 import { authChangeEvent, getAuthSession, type AuthSession } from '../lib/supabase-auth'
@@ -21,20 +23,32 @@ export function ScreeningSaveActions({ result, summary, normalizedImage, initial
   const [retention, setRetention] = useState<RetentionDays>(30)
   const [state, setState] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle')
   const [message, setMessage] = useState('')
+  const [savedDestination, setSavedDestination] = useState<{ kind: 'account'; recordId: string } | { kind: 'browser' } | null>(initialDestination)
   const [session, setSession] = useState<AuthSession | null>(() => getAuthSession())
   const hasAccount = Boolean(session?.userId)
 
   useEffect(() => {
     if (initialDestination) {
+      setSavedDestination(initialDestination)
       setState('saved')
       setMessage(initialDestination.kind === 'account' ? 'Hasil skrining sudah tersimpan di akun Anda.' : 'Hasil skrining tersimpan di browser ini selama 3 hari.')
       const active = getActiveScreening(result.screening_id)
       if (active && !active.savedDestination) saveActiveScreening({ ...active, savedDestination: initialDestination })
       return
     }
+    setSavedDestination(null)
     setState('idle')
     setMessage('')
   }, [initialDestination, result.screening_id])
+
+  useEffect(() => {
+    if (!summary || !savedDestination) return
+    if (savedDestination.kind === 'browser') {
+      updateGuestHistorySummary(result.screening_id, summary)
+      return
+    }
+    void updateAccountScreeningSummary(savedDestination.recordId, summary).catch(() => undefined)
+  }, [result.screening_id, savedDestination, summary])
 
   useEffect(() => {
     const syncSession = () => setSession(getAuthSession())
@@ -50,6 +64,7 @@ export function ScreeningSaveActions({ result, summary, normalizedImage, initial
         const saved = await saveAccountScreening({ result, summary, retentionDays: retention, normalizedImage })
         setMessage(saved.wasExisting ? 'Hasil ini sudah ada di riwayat akun Anda.' : `Hasil disimpan di akun selama ${retention} hari.`)
         const destination = { kind: 'account' as const, recordId: saved.record.id }
+        setSavedDestination(destination)
         const active = getActiveScreening(result.screening_id)
         if (active) saveActiveScreening({ ...active, savedDestination: destination })
         onSaved?.(destination)
@@ -57,6 +72,7 @@ export function ScreeningSaveActions({ result, summary, normalizedImage, initial
         saveGuestHistory(result, summary)
         setMessage('Hasil disimpan di browser ini selama 3 hari. Foto tidak disimpan.')
         const destination = { kind: 'browser' as const }
+        setSavedDestination(destination)
         const active = getActiveScreening(result.screening_id)
         if (active) saveActiveScreening({ ...active, savedDestination: destination })
         onSaved?.(destination)

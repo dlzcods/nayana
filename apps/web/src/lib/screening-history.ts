@@ -63,6 +63,12 @@ export function saveGuestHistory(result: ScreeningResult, summary: ExecutiveSumm
   window.localStorage.setItem(guestHistoryKey, JSON.stringify(history.slice(0, 12)))
 }
 
+export function updateGuestHistorySummary(screeningId: string, summary: ExecutiveSummary) {
+  const history = cleanGuestHistory()
+  const next = history.map((item) => item.result.screening_id === screeningId ? { ...item, summary } : item)
+  window.localStorage.setItem(guestHistoryKey, JSON.stringify(next))
+}
+
 export function getGuestHistory() {
   return cleanGuestHistory()
 }
@@ -144,6 +150,19 @@ export async function getAccountScreeningByOrigin(originScreeningId: string) {
   if (!response.ok) throw await databaseError(response, 'Riwayat akun belum dapat diverifikasi.')
   const records = await response.json() as ScreeningHistoryItem[]
   return records[0] || null
+}
+
+export async function updateAccountScreeningSummary(recordId: string, summary: ExecutiveSummary) {
+  if (!supabaseUrl) return
+  const response = await authenticatedSupabaseFetch(
+    `/rest/v1/screening_records?id=eq.${encodeURIComponent(recordId)}`,
+    {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json', Prefer: 'return=minimal' },
+      body: JSON.stringify({ executive_summary: summary }),
+    },
+  )
+  if (!response.ok) throw await databaseError(response, 'Ringkasan belum dapat diperbarui pada riwayat akun.')
 }
 
 export async function getAccountHistory(filters: HistoryFilters = {}) {
