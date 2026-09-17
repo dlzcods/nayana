@@ -47,6 +47,7 @@ DEFAULT_GEMINI_MODEL = "gemma-4-26b-a4b-it"
 # deadline aligned so an otherwise active generation is not cut off at 120s.
 # This is operational configuration, not a secret or Modal environment variable.
 RAG_PROVIDER_TIMEOUT_MS = 300_000
+RAG_STREAM_MAX_OUTPUT_TOKENS = 2_048
 MAX_USER_CHAT_CHARS = 900
 MAX_ASSISTANT_CHAT_CHARS = 4000
 MAX_PDF_IMAGE_BYTES = 10 * 1024 * 1024
@@ -478,8 +479,8 @@ def rag_enabled() -> bool:
 def rag_completion(instruction: str, payload: str, response_schema: dict | None = None) -> str:
     from rag.stream import ProviderStreamIncomplete, collect_json_stream
     from rag.telemetry import current_trace
-    from rag.providers import (ProviderRequestError, openrouter_completion,
-                               selected_rag_provider)
+    from rag.providers import (ProviderRequestError, netra_completion,
+                               openrouter_completion, selected_rag_provider)
     provider = selected_rag_provider()
     if not provider.api_key:
         raise HTTPException(status_code=503, detail="Percakapan hasil belum diaktifkan.")
@@ -492,6 +493,12 @@ def rag_completion(instruction: str, payload: str, response_schema: dict | None 
             collected = openrouter_completion(
                 provider=provider, instruction=instruction, payload=payload,
                 timeout_ms=RAG_PROVIDER_TIMEOUT_MS, max_output_tokens=15000,
+            )
+        elif provider.name == "netra":
+            collected = netra_completion(
+                provider=provider, instruction=instruction, payload=payload,
+                timeout_ms=RAG_PROVIDER_TIMEOUT_MS, max_output_tokens=15000,
+                response_schema=response_schema,
             )
         else:
             from google import genai
@@ -563,6 +570,77 @@ def rag_completion(instruction: str, payload: str, response_schema: dict | None 
     finally:
         if client is not None:
             client.close()
+
+
+def rag_text_fragments(instruction: str, payload: str):
+    """Yield provider prose internally for verified-sentence streaming only."""
+    from rag.providers import netra_text_stream, openrouter_text_stream, selected_rag_provider
+
+    provider = selected_rag_provider()
+    if not provider.api_key:
+        raise HTTPException(status_code=503, detail="Percakapan hasil belum diaktifkan.")
+    if provider.name == "openrouter":
+        yield from openrouter_text_stream(
+            provider=provider, instruction=instruction, payload=payload,
+            timeout_ms=RAG_PROVIDER_TIMEOUT_MS, max_output_tokens=RAG_STREAM_MAX_OUTPUT_TOKENS,
+        )
+        return
+    if provider.name == "netra":
+        yield from netra_text_stream(
+            provider=provider, instruction=instruction, payload=payload,
+            timeout_ms=RAG_PROVIDER_TIMEOUT_MS, max_output_tokens=RAG_STREAM_MAX_OUTPUT_TOKENS,
+        )
+        return
+
+    from google import genai
+    from google.genai import types
+
+    client = genai.Client(api_key=provider.api_key)
+    try:
+        response_stream = client.models.generate_content_stream(
+            model=provider.model,
+            contents=payload,
+            config=types.GenerateContentConfig(
+                thinking_config=types.ThinkingConfig(thinking_level="MINIMAL", include_thoughts=False),
+                http_options=types.HttpOptions(timeout=RAG_PROVIDER_TIMEOUT_MS),
+                max_output_tokens=RAG_STREAM_MAX_OUTPUT_TOKENS,
+                temperature=0.2,
+                system_instruction=instruction,
+            ),
+        )
+        for response in response_stream:
+            candidates = getattr(response, "candidates", None) or []
+            for candidate in candidates:
+                for part in getattr(getattr(candidate, "content", None), "parts", None) or []:
+                    if not getattr(part, "thought", False) and getattr(part, "text", None):
+                        yield part.text
+    finally:
+        client.close()
+
+
+def sse_event(event: str, data: dict[str, object]) -> str:
+    return f"event: {event}\ndata: {json.dumps(data, ensure_ascii=False)}\n\n"
+
+
+def stream_screening_chat(payload: ScreeningChatRequest):
+    """Keep the public SSE stream limited to attribution-approved events."""
+    from rag.service import stream_answer_question
+
+    try:
+        for event, data in stream_answer_question(
+            payload.question, [], payload.screening.top_prediction.key,
+            build_summary_context(payload.screening), rag_text_fragments,
+            memory_intent=payload.memory.previous_intent,
+        ):
+            yield sse_event(event, data)
+    except HTTPException as error:
+        yield sse_event("error", {"code": "UNAVAILABLE", "message": str(error.detail)})
+    except Exception as error:
+        logger.exception("NEI verified stream unavailable (error_type=%s)", type(error).__name__)
+        yield sse_event("error", {
+            "code": "UNAVAILABLE",
+            "message": "Jawaban bersumber belum dapat disiapkan. Silakan coba lagi; pertanyaan Anda tidak perlu dihapus.",
+        })
 
 
 def response_text_without_thoughts(response: object) -> str:
@@ -1105,6 +1183,17 @@ async def create_suggested_questions(payload: SuggestedQuestionRequest):
 @app.post("/v1/screenings/chat", response_model=ScreeningChatResponse)
 async def create_screening_chat(payload: ScreeningChatRequest):
     return await run_in_threadpool(generate_screening_chat, payload)
+
+
+@app.post("/v1/screenings/chat/stream")
+def create_screening_chat_stream(payload: ScreeningChatRequest):
+    if not rag_enabled():
+        raise HTTPException(status_code=503, detail="Percakapan bersumber belum diaktifkan.")
+    return StreamingResponse(
+        stream_screening_chat(payload),
+        media_type="text/event-stream",
+        headers={"Cache-Control": "no-cache"},
+    )
 
 
 @app.post("/v1/screenings/report.pdf")

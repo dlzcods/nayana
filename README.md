@@ -61,7 +61,11 @@ VITE_SUPABASE_URL="https://PROJECT-REF.supabase.co"
 VITE_SUPABASE_PUBLISHABLE_KEY="sb_publishable_..."
 ```
 
-Jangan menaruh API key Gemini, OpenRouter, atau Firecrawl di file frontend. Key tersebut hanya disimpan di environment backend atau Modal Secret.
+Jangan menaruh API key Gemini, OpenRouter, Netra, atau Firecrawl di file frontend. Key tersebut hanya disimpan di environment backend atau Modal Secret.
+
+Chat NAYANA menggunakan source-attributed SSE. Antarmuka hanya menerima kalimat setelah server menemukan dukungan evidence dan marker sitasi; provider delta tidak pernah dikirim ke browser.
+
+Untuk menjalankan Chat NAYANA melalui Netra Runtime, tambahkan `NETRA_API_KEY` ke Modal Secret `nayana`, lalu set `NAYANA_RAG_PROVIDER=netra` dan `NAYANA_RAG_NETRA_MODEL=deepseek/deepseek-v4-flash-0731`. Adapter Netra mengirim teks pertanyaan, konteks hasil, dan evidence NEI saja. Foto fundus tidak pernah masuk ke request model bahasa.
 
 ## Deploy layanan backend
 
