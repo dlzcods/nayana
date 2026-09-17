@@ -51,23 +51,19 @@ export function ScreeningResultPage() {
       try {
         const response = await getScreeningResult(screeningId)
         if (active) setPendingResult(response)
-        let nextSummary: ExecutiveSummary | null = null
-        let nextSummaryError: string | null = null
-
-        try {
-          nextSummary = await getExecutiveSummary(response)
-        } catch (reason) {
-          nextSummaryError = reason instanceof Error ? reason.message : 'Ringkasan belum tersedia.'
-        }
-
         if (active) {
           setResult(response)
           setPendingResult(null)
-          setSummary(nextSummary)
-          setSummaryError(nextSummaryError)
-          saveActiveScreening({ screening: response, summary: nextSummary })
+          saveActiveScreening({ screening: response, summary: null })
           setIsSaved(getGuestHistory().some((item) => item.result.screening_id === screeningId))
         }
+        void getExecutiveSummary(response).then((nextSummary) => {
+          if (!active) return
+          setSummary(nextSummary)
+          saveActiveScreening({ ...getActiveScreening(screeningId), screening: response, summary: nextSummary })
+        }).catch((reason) => {
+          if (active) setSummaryError(reason instanceof Error ? reason.message : 'Ringkasan belum tersedia.')
+        })
       } catch (reason) {
         if (active) setError(reason instanceof Error ? reason.message : 'Hasil demo belum tersedia.')
       }
@@ -77,13 +73,13 @@ export function ScreeningResultPage() {
   }, [screeningId])
 
   const chartPredictions = result?.predictions.slice(0, 4) || []
-  const summaryText = result
+  const summaryParagraphs = result
     ? summary
-      ? summary.general_information || summary.overview
+      ? [summary.general_information, summary.overview].filter((paragraph, index, items) => Boolean(paragraph) && items.indexOf(paragraph) === index)
       : summaryError
-        ? `Model menemukan pola pada foto fundus yang paling mirip dengan kategori ${result.top_prediction.label.toLowerCase()}. Kategori ini perlu dipahami bersama keluhan, riwayat kesehatan, dan pemeriksaan langsung oleh dokter mata.`
-        : 'Ringkasan sedang disiapkan dari hasil model.'
-    : ''
+        ? [`Model menemukan pola pada foto fundus yang paling mirip dengan kategori ${result.top_prediction.label.toLowerCase()}. Kategori ini perlu dipahami bersama keluhan, riwayat kesehatan, dan pemeriksaan langsung oleh dokter mata.`]
+        : ['Ringkasan sedang disiapkan dari hasil model.']
+    : []
 
   const leavePath = getAuthSession() ? '/history' : '/history-local'
 
@@ -159,7 +155,7 @@ export function ScreeningResultPage() {
 
               <section className="result-report__summary" aria-live="polite" aria-labelledby="summary-title">
                 <p className="app-kicker" id="summary-title">Nayana AI Summary</p>
-                <p className="result-report__summary-text">{summaryText}</p>
+                <div className="result-report__summary-text">{summaryParagraphs.map((paragraph) => <p key={paragraph}>{paragraph}</p>)}</div>
                 <p className="result-report__disclaimer">Bukan diagnosis medis. Konfirmasi dengan dokter mata.</p>
               </section>
             </section>

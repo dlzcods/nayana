@@ -25,7 +25,8 @@ export function ExecutiveSummaryCard({ screening, summary, error }: ExecutiveSum
           <article className="executive-summary__overview">
             <p className="executive-summary__label">Apa artinya</p>
             <h3>{summary.title}</h3>
-            <p>{summary.general_information || summary.overview}</p>
+            <p>{summary.general_information}</p>
+            {summary.overview && summary.overview !== summary.general_information && <p>{summary.overview}</p>}
           </article>
           <aside className="executive-summary__next">
             <p className="executive-summary__label">Langkah yang disarankan</p>

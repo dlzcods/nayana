@@ -57,6 +57,7 @@ export function PersonalScreeningPanel({ onProcessingChange }: PersonalScreening
   const navigate = useNavigate()
   const fileInputRef = useRef<HTMLInputElement>(null)
   const uploadedResultRef = useRef<HTMLElement>(null)
+  const summaryRequest = useRef(0)
   const [image, setImage] = useState<File | null>(null)
   const [previewUrl, setPreviewUrl] = useState<string | null>(null)
   const [normalizedImage, setNormalizedImage] = useState<Blob | null>(null)
@@ -199,6 +200,7 @@ export function PersonalScreeningPanel({ onProcessingChange }: PersonalScreening
     setSummaryError(null)
     setSavedDestination(null)
     setDiscussionQuestions([])
+    summaryRequest.current += 1
     setError(null)
     if (fileInputRef.current) fileInputRef.current.value = ''
   }
@@ -226,19 +228,18 @@ export function PersonalScreeningPanel({ onProcessingChange }: PersonalScreening
 
       if (image) {
         const result = await startUploadedScreening(image, ageConfirmed, processingConsent)
-        let nextSummary: ExecutiveSummary | null = null
-        let nextSummaryError: string | null = null
-
-        try {
-          nextSummary = await getExecutiveSummary(result)
-        } catch (reason) {
-          nextSummaryError = reason instanceof Error ? reason.message : 'Ringkasan belum tersedia.'
-        }
-
+        const requestId = ++summaryRequest.current
         setScreeningResult(result)
-        setSummary(nextSummary)
-        setSummaryError(nextSummaryError)
+        setSummary(null)
+        setSummaryError(null)
         setDiscussionQuestions([])
+        void getExecutiveSummary(result).then((nextSummary) => {
+          if (requestId !== summaryRequest.current) return
+          setSummary(nextSummary)
+        }).catch((reason) => {
+          if (requestId !== summaryRequest.current) return
+          setSummaryError(reason instanceof Error ? reason.message : 'Ringkasan belum tersedia.')
+        })
       }
     } catch (reason) {
       setError(

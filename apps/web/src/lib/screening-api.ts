@@ -72,6 +72,50 @@ export type ExecutiveSummary = {
   disclaimer: string
 }
 
+const SUMMARY_DISCLAIMER = 'Bukan diagnosis medis. Konfirmasi dengan dokter mata.'
+
+// These are reviewed, category-level educational summaries. They intentionally
+// do not use a person’s image, score, symptoms, or chat history, so returning
+// them locally avoids an LLM request on every screening result.
+const CONDITION_SUMMARIES: Record<string, ExecutiveSummary> = {
+  cataract: {
+    title: 'Tentang katarak',
+    general_information: 'Katarak adalah kekeruhan pada lensa mata yang membantu memfokuskan cahaya ke retina. Seiring kekeruhan bertambah, penglihatan dapat terasa buram atau berkabut, warna tampak kurang cerah, dan cahaya dapat terasa menyilaukan.',
+    overview: 'Katarak paling sering berkaitan dengan perubahan alami pada mata seiring bertambahnya usia, ketika protein pada lensa dapat menggumpal. Diabetes, riwayat cedera atau operasi mata, penggunaan steroid, merokok, dan paparan sinar matahari juga dapat menjadi faktor yang perlu dibahas pada pemeriksaan langsung.',
+    common_factors: 'Usia, diabetes, riwayat keluarga, cedera atau operasi mata, penggunaan steroid, merokok, dan paparan sinar matahari dapat meningkatkan risiko katarak.',
+    what_to_notice: 'Perhatikan perubahan penglihatan yang mengganggu aktivitas, silau, atau warna yang terasa memudar.',
+    next_step: 'Dokter mata dapat menilai lensa dan bagian mata lain melalui pemeriksaan langsung untuk menentukan apakah ada langkah lanjutan yang diperlukan.',
+    disclaimer: SUMMARY_DISCLAIMER,
+  },
+  diabetic_retinopathy: {
+    title: 'Tentang retinopati diabetik',
+    general_information: 'Retinopati diabetik berkaitan dengan perubahan pada pembuluh darah retina, yaitu lapisan peka cahaya di bagian belakang mata. Pada tahap awal kondisi ini dapat belum menimbulkan keluhan, meskipun perubahan pada retina sudah dapat terjadi.',
+    overview: 'Pada diabetes, gula darah yang tinggi dalam jangka waktu lama dapat merusak pembuluh darah kecil di retina. Lama hidup dengan diabetes, tekanan darah, dan kolesterol merupakan bagian dari konteks kesehatan yang dapat memengaruhi risiko dan perlu dibahas bersama tenaga kesehatan.',
+    common_factors: 'Diabetes, lamanya diabetes, gula darah, tekanan darah, dan kolesterol merupakan konteks yang perlu dinilai bersama tenaga kesehatan.',
+    what_to_notice: 'Perubahan penglihatan, seperti buram atau muncul bintik melayang, perlu disampaikan saat pemeriksaan.',
+    next_step: 'Pemeriksaan mata dengan pelebaran pupil membantu dokter menilai retina dan menentukan tindak lanjut yang sesuai.',
+    disclaimer: SUMMARY_DISCLAIMER,
+  },
+  glaucoma: {
+    title: 'Tentang glaukoma',
+    general_information: 'Glaukoma adalah kelompok kondisi yang dapat merusak saraf optik, yaitu saraf yang mengirimkan informasi visual dari mata ke otak. Perubahannya sering tidak terasa pada tahap awal, sehingga seseorang dapat tidak menyadari adanya gangguan penglihatan tepi.',
+    overview: 'Penyebab jenis glaukoma yang paling umum belum sepenuhnya dipahami. Tekanan bola mata yang tinggi sering menjadi salah satu faktor, tetapi glaukoma juga dapat terjadi pada tekanan yang dianggap normal. Usia, riwayat keluarga, serta hasil pemeriksaan saraf optik dan lapang pandang membantu dokter menilai risikonya.',
+    common_factors: 'Usia, riwayat keluarga, tekanan bola mata, saraf optik, dan lapang pandang perlu dipertimbangkan dalam pemeriksaan glaukoma.',
+    what_to_notice: 'Sampaikan perubahan penglihatan, riwayat keluarga glaukoma, atau keluhan mata yang Anda alami kepada dokter.',
+    next_step: 'Dokter mata dapat melakukan pemeriksaan menyeluruh untuk menilai saraf optik dan faktor lain yang tidak dapat dipastikan dari satu foto fundus.',
+    disclaimer: SUMMARY_DISCLAIMER,
+  },
+  normal: {
+    title: 'Tentang kategori normal',
+    general_information: 'Kategori normal menjadi pola yang paling mirip pada hasil ini. Itu berarti model tidak menemukan pola dari tiga kategori lain yang lebih kuat pada foto yang dibandingkan.',
+    overview: 'Kategori normal bukan jaminan bahwa mata bebas dari semua kondisi. Keluhan, riwayat kesehatan, dan faktor risiko dapat tidak terlihat dari satu foto fundus; beberapa kondisi mata juga dapat belum menimbulkan gejala pada tahap awal.',
+    common_factors: 'Kesehatan mata tetap dipengaruhi oleh riwayat kesehatan, keluhan, dan faktor risiko yang tidak terlihat dari satu foto.',
+    what_to_notice: 'Perhatikan perubahan penglihatan atau keluhan mata yang menetap maupun mendadak.',
+    next_step: 'Lanjutkan pemeriksaan mata berkala sesuai kebutuhan dan konsultasikan bila ada keluhan atau faktor risiko.',
+    disclaimer: SUMMARY_DISCLAIMER,
+  },
+}
+
 export type ChatCitation = {
   id: number
   chunk_id: string
@@ -141,7 +185,6 @@ const configuredApiBase = import.meta.env.VITE_NAYANA_API_BASE_URL?.trim()
 const apiBase = (configuredApiBase || 'http://localhost:8000').replace(/\/$/, '')
 const configuredReportApiBase = import.meta.env.VITE_NAYANA_REPORT_API_BASE_URL?.trim()
 const reportApiBase = configuredReportApiBase?.replace(/\/$/, '') || ''
-const executiveSummaryRequests = new Map<string, Promise<ExecutiveSummary>>()
 const suggestedQuestionRequests = new Map<string, { request: Promise<SuggestedQuestion[]>; expiresAt: number }>()
 const SUGGESTION_BROWSER_CACHE_MS = 5 * 60 * 1000
 
@@ -224,20 +267,9 @@ export function startUploadedScreening(
 }
 
 export function getExecutiveSummary(screening: ScreeningResult) {
-  const existingRequest = executiveSummaryRequests.get(screening.screening_id)
-  if (existingRequest) return existingRequest
-
-  const requestPromise = request<ExecutiveSummary>('/v1/screenings/executive-summary', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ screening }),
-  })
-
-  executiveSummaryRequests.set(screening.screening_id, requestPromise)
-  void requestPromise.catch(() => {
-    executiveSummaryRequests.delete(screening.screening_id)
-  })
-  return requestPromise
+  const summary = CONDITION_SUMMARIES[screening.top_prediction.key]
+  if (!summary) return Promise.reject(new Error('Ringkasan untuk kategori hasil ini belum tersedia.'))
+  return Promise.resolve(summary)
 }
 
 export function askScreeningQuestion(options: {

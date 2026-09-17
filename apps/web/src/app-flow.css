@@ -2914,6 +2914,8 @@
 .result-report__note { margin: 14px 0 0; color: #85898d; font-size: 11px; line-height: 1.4; }
 .result-report__summary { display: flex; flex-direction: column; justify-content: space-between; }
 .result-report__summary-text { margin: 16px 0 0; color: #454b4f; font-size: 15px; line-height: 1.62; }
+.result-report__summary-text p { margin: 0; }
+.result-report__summary-text p + p { margin-top: 12px; }
 .result-report__disclaimer { margin: 22px 0 0; color: #7b8083; font-size: 11px; line-height: 1.45; }
 
 .result-category-lines { display: grid; gap: 14px; margin-top: 18px; }

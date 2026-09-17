@@ -26,8 +26,17 @@ export function DoctorKitPage() {
     void (async () => {
       try {
         const result = screening || await getScreeningResult(screeningId)
-        const nextSummary = summary || await getExecutiveSummary(result).catch(() => null)
-        if (active) { setScreening(result); setSummary(nextSummary); saveActiveScreening({ ...getActiveScreening(screeningId), screening: result, summary: nextSummary, discussionQuestions: selected }) }
+        if (active) {
+          setScreening(result)
+          saveActiveScreening({ ...getActiveScreening(screeningId), screening: result, summary, discussionQuestions: selected })
+        }
+        if (!summary) {
+          void getExecutiveSummary(result).then((nextSummary) => {
+            if (!active) return
+            setSummary(nextSummary)
+            saveActiveScreening({ ...getActiveScreening(screeningId), screening: result, summary: nextSummary, discussionQuestions: selected })
+          }).catch(() => undefined)
+        }
       } catch (reason) { if (active) setError(reason instanceof Error ? reason.message : 'Persiapan konsultasi belum tersedia.') }
     })()
     return () => { active = false }
