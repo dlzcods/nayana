@@ -3,15 +3,16 @@ import { Link, useParams } from '@tanstack/react-router'
 import { SiteHeader } from '../components/SiteHeader'
 import { BackArrowIcon } from '../components/BackArrowIcon'
 import {
-  askScreeningQuestion,
   demoCaseIdFromScreeningId,
   demoCaseImageUrl,
   getExecutiveSummary,
   getScreeningResult,
   getSuggestedQuestions,
   compactConversationMemory,
+  streamScreeningQuestion,
   type ExecutiveSummary,
   type ScreeningChatMessage,
+  type ScreeningChatStreamStatus,
   type ScreeningResult,
   type SuggestedQuestion,
 } from '../lib/screening-api'
@@ -83,6 +84,7 @@ export function ScreeningChatPage() {
   const [draft, setDraft] = useState('')
   const [isLoadingContext, setIsLoadingContext] = useState(true)
   const [isSending, setIsSending] = useState(false)
+  const [streamStatus, setStreamStatus] = useState<ScreeningChatStreamStatus | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [failedQuestion, setFailedQuestion] = useState<string | null>(null)
   const [overviewPreference, setOverviewPreference] = useState<'auto' | 'expanded' | 'collapsed'>('auto')
@@ -133,17 +135,16 @@ export function ScreeningChatPage() {
 
       try {
         const result = await getScreeningResult(screeningId)
-        let nextSummary: ExecutiveSummary | null = null
-        try {
-          nextSummary = await getExecutiveSummary(result)
-        } catch {
-          nextSummary = null
-        }
         if (active) {
           setScreening(result)
-          setSummary(nextSummary)
-          saveActiveScreening({ screening: result, summary: nextSummary })
+          saveActiveScreening({ screening: result, summary: null })
+          setIsLoadingContext(false)
         }
+        void getExecutiveSummary(result).then((nextSummary) => {
+          if (!active) return
+          setSummary(nextSummary)
+          saveActiveScreening({ ...getActiveScreening(screeningId), screening: result, summary: nextSummary })
+        }).catch(() => undefined)
       } catch (reason) {
         if (active) setError(reason instanceof Error ? reason.message : 'Ruang percakapan belum dapat dibuka.')
       } finally {
@@ -174,6 +175,7 @@ export function ScreeningChatPage() {
     setError(null)
     setFailedQuestion(null)
     setIsSending(true)
+    setStreamStatus('retrieving')
     shouldFollowMessages.current = true
     try {
       if (cachedAnswer?.answer) {
@@ -182,13 +184,35 @@ export function ScreeningChatPage() {
         setFailedQuestion(null)
         if (!saveSessionChat(screeningId, completed)) setError('Jawaban tampil, tetapi browser belum dapat menyimpan sesi ini untuk dimuat ulang.')
       } else {
-        const response = await askScreeningQuestion({
+        const requestOptions = {
           screening,
           question: cleanQuestion,
           memory: compactConversationMemory(nextMessages.slice(0, -1)),
+        }
+        let response: Omit<ScreeningChatMessage, 'role' | 'content'> & { answer?: string }
+        let streamedContent = ''
+        let streamedMetadata: Omit<ScreeningChatMessage, 'role' | 'content'> = {}
+        const metadata = await streamScreeningQuestion(requestOptions, {
+          onStatus: (stage) => { if (epoch === roomEpoch.current) setStreamStatus(stage) },
+          onSentence: (sentence) => {
+            if (epoch !== roomEpoch.current) return
+            streamedContent = [streamedContent, sentence.text.trim()].filter(Boolean).join(' ')
+            streamedMetadata = {
+              citations: sentence.citations,
+              source_status: sentence.source_status,
+              corpus_version: sentence.corpus_version,
+            }
+            setMessages([...nextMessages, { role: 'assistant', content: streamedContent, ...streamedMetadata }])
+          },
         })
+        if (!streamedContent) throw new Error('Sumber NEI belum cukup untuk menampilkan jawaban yang dapat diverifikasi.')
+        response = { ...streamedMetadata, ...metadata, answer: streamedContent }
         if (epoch !== roomEpoch.current) return
-        const completed: ScreeningChatMessage[] = [...nextMessages, { ...response, role: 'assistant', content: response.answer.trim() }]
+        const completed: ScreeningChatMessage[] = [...nextMessages, {
+          ...response,
+          role: 'assistant',
+          content: response.answer?.trim() || '',
+        }]
         setMessages(completed)
         setFailedQuestion(null)
         if (!saveSessionChat(screeningId, completed)) setError('Jawaban tampil, tetapi browser belum dapat menyimpan sesi ini untuk dimuat ulang.')
@@ -199,7 +223,7 @@ export function ScreeningChatPage() {
         setFailedQuestion(cleanQuestion)
       }
     } finally {
-      if (epoch === roomEpoch.current) { sending.current = false; setIsSending(false) }
+      if (epoch === roomEpoch.current) { sending.current = false; setIsSending(false); setStreamStatus(null) }
     }
   }
 
@@ -304,7 +328,7 @@ export function ScreeningChatPage() {
                 </button>
                 <div className="app-history-chat__thread-overview-copy">
                   <h2 id="chat-title">Tanyakan hasil ini dengan tenang.</h2>
-                  <p>Jawaban bersifat edukatif dan membantu Anda menyiapkan diskusi dengan dokter spesialis mata (Sp.M).</p>
+                  <p>Pilih hal yang ingin Anda pahami dari hasil skrining dan siapkan bahan diskusi dengan dokter mata.</p>
                 </div>
               </header>
               <div
@@ -317,7 +341,7 @@ export function ScreeningChatPage() {
                 }}
               >
                 {messages.map((message, index) => <div className={`app-chat-bubble app-chat-bubble--${message.role}`} key={`${message.role}-${index}`}><ChatMessageContent text={message.content} citations={message.citations} onCitationOpen={() => setOverviewPreference('collapsed')} /></div>)}
-                {isSending && <div className="app-chat-bubble app-chat-bubble--loading" aria-label="Menyiapkan penjelasan"><span /><span /><span /><p>Menyusun penjelasan…</p></div>}
+                {isSending && <div className="app-chat-bubble app-chat-bubble--loading" aria-label="Menyiapkan penjelasan"><span /><span /><span /><p>{streamStatus === 'retrieving' ? 'Menyiapkan sumber…' : streamStatus === 'attributing' ? 'Memeriksa dukungan sumber…' : 'Menyusun penjelasan…'}</p></div>}
               </div>
               {messages.length === 0 && !isSending && (
                 <SuggestedQuestionStarter screening={screening} summary={summary} onSelect={(item: SuggestedQuestion) => { void sendQuestion(item.question, item) }} />
@@ -327,6 +351,7 @@ export function ScreeningChatPage() {
                 <label className="sr-only" htmlFor="chat-room-input">Tulis pertanyaan tentang hasil ini</label>
                 <input id="chat-room-input" value={draft} maxLength={900} placeholder="Tulis pertanyaan tentang hasil ini" onChange={(event) => setDraft(event.target.value)} disabled={isSending} />
                 <button type="submit" aria-label="Kirim pertanyaan" disabled={isSending || !draft.trim()}>↗</button>
+                <p className="app-history-chat__disclaimer">NAYANA adalah skrining awal, bukan pengganti diagnosis dokter.</p>
               </form>
             </>
           )}

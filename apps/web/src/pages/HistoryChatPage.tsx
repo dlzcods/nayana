@@ -3,7 +3,7 @@ import { Link, useParams } from '@tanstack/react-router'
 import { BackArrowIcon } from '../components/BackArrowIcon'
 import { SiteHeader } from '../components/SiteHeader'
 import { ChatMessageContent } from './ScreeningChatPage'
-import { askScreeningQuestion, compactConversationMemory, demoCaseIdFromScreeningId, demoCaseImageUrl, getSuggestedQuestions, type ScreeningChatMessage, type SuggestedQuestion } from '../lib/screening-api'
+import { compactConversationMemory, demoCaseIdFromScreeningId, demoCaseImageUrl, getSuggestedQuestions, streamScreeningQuestion, type ScreeningChatMessage, type SuggestedQuestion } from '../lib/screening-api'
 import { getConversationMessages, getOrCreateConversation, saveConversationMessage, type ScreeningConversation } from '../lib/screening-conversations'
 import { getAccountHistoryRecord, getAccountPhoto, screeningFromHistory, type ScreeningHistoryItem } from '../lib/screening-history'
 import { SuggestedQuestionStarter } from '../components/SuggestedQuestionStarter'
@@ -111,17 +111,40 @@ export function HistoryChatPage() {
         didPersistUserMessage = true
       }
       if (epoch !== roomEpoch.current) return
-      const response = cachedAnswer?.answer ? cachedAnswer : await askScreeningQuestion({
-        screening: screeningFromHistory(record),
-        question: cleanQuestion,
-        memory: compactConversationMemory(nextMessages.slice(0, -1)),
-      })
+      let response: Omit<ScreeningChatMessage, 'role' | 'content'> & { answer?: string }
+      if (cachedAnswer?.answer) {
+        response = { ...cachedAnswer, answer: cachedAnswer.answer.trim() }
+      } else {
+        let streamedContent = ''
+        let streamedMetadata: Omit<ScreeningChatMessage, 'role' | 'content'> = {}
+        const metadata = await streamScreeningQuestion({
+          screening: screeningFromHistory(record),
+          question: cleanQuestion,
+          memory: compactConversationMemory(nextMessages.slice(0, -1)),
+        }, {
+          onStatus: () => undefined,
+          onSentence: (sentence) => {
+            if (epoch !== roomEpoch.current) return
+            streamedContent = [streamedContent, sentence.text.trim()].filter(Boolean).join(' ')
+            streamedMetadata = {
+              citations: sentence.citations,
+              source_status: sentence.source_status,
+              corpus_version: sentence.corpus_version,
+            }
+            setMessages([...nextMessages, { role: 'assistant', content: streamedContent, ...streamedMetadata }])
+          },
+        })
+        if (!streamedContent) throw new Error('Sumber NEI belum cukup untuk menampilkan jawaban yang dapat diverifikasi.')
+        response = { ...streamedMetadata, ...metadata, answer: streamedContent }
+      }
       const answer = response.answer?.trim()
       if (!answer) throw new Error('Jawaban bersumber belum tersedia.')
       const assistantMessage: ScreeningChatMessage = { ...response, role: 'assistant', content: answer }
       await saveConversationMessage(conversation.id, assistantMessage)
       if (epoch !== roomEpoch.current) return
-      setMessages((current) => [...current, assistantMessage])
+      // Sentence events have already rendered one temporary assistant bubble.
+      // Final completion replaces that bubble with its complete metadata.
+      setMessages([...nextMessages, assistantMessage])
       setFailedQuestion(null)
     } catch (reason) {
       if (epoch !== roomEpoch.current) return
@@ -224,7 +247,7 @@ export function HistoryChatPage() {
                 </button>
                 <div className="app-history-chat__thread-overview-copy">
                   <h2 id="history-chat-title">Tanyakan hasil ini dengan tenang.</h2>
-                  <p>Jawaban bersifat edukatif untuk membantu Anda memahami hasil skrining awal dan menyiapkan diskusi lanjutan.</p>
+                  <p>Pilih hal yang ingin Anda pahami dari hasil skrining dan siapkan bahan diskusi dengan dokter mata.</p>
                 </div>
               </header>
               <div
@@ -253,6 +276,7 @@ export function HistoryChatPage() {
                 <label className="sr-only" htmlFor="history-chat-input">Tulis pertanyaan tentang hasil ini</label>
                 <input id="history-chat-input" value={draft} maxLength={900} disabled={isSending} placeholder="Tulis pertanyaan tentang hasil ini" onChange={(event) => setDraft(event.target.value)} />
                 <button type="submit" disabled={isSending || !draft.trim()} aria-label="Kirim pertanyaan">↗</button>
+                <p className="app-history-chat__disclaimer">NAYANA adalah skrining awal, bukan pengganti diagnosis dokter.</p>
               </form>
             </>
           )}

@@ -155,6 +155,12 @@ export type ScreeningConversationMemory = {
   previous_intent?: ScreeningConversationIntent
 }
 
+export type ScreeningChatStreamStatus = 'retrieving' | 'generating' | 'attributing'
+
+export type ScreeningChatStreamSentence = GroundingMetadata & {
+  text: string
+}
+
 const conversationIntentRules: Array<[ScreeningConversationIntent, RegExp]> = [
   ['urgent', /mendadak|tiba.?tiba|nyeri.*hebat|sakit.*hebat|darurat/i],
   ['examination', /periksa|memeriksa|pemeriksaan|cek|tes|deteksi/i],
@@ -282,6 +288,95 @@ export function askScreeningQuestion(options: {
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(options),
   })
+}
+
+export async function streamScreeningQuestion(options: {
+  screening: ScreeningResult
+  question: string
+  memory?: ScreeningConversationMemory
+}, callbacks: {
+  onStatus: (stage: ScreeningChatStreamStatus) => void
+  onSentence: (sentence: ScreeningChatStreamSentence) => void
+}): Promise<GroundingMetadata> {
+  let response: Response
+  try {
+    response = await fetch(apiUrl('/v1/screenings/chat/stream'), {
+      method: 'POST',
+      headers: { Accept: 'text/event-stream', 'Content-Type': 'application/json' },
+      body: JSON.stringify(options),
+    })
+  } catch {
+    throw new Error('Layanan NAYANA sedang tidak dapat dihubungi. Silakan coba lagi.')
+  }
+
+  if (!response.ok || !response.body) {
+    const body = await response.json().catch(() => null) as { detail?: string } | null
+    throw new Error(body?.detail || 'Jawaban bersumber belum dapat disiapkan.')
+  }
+
+  const reader = response.body.getReader()
+  const decoder = new TextDecoder()
+  let buffered = ''
+  let completed: GroundingMetadata | null = null
+
+  function consumeEvent(rawEvent: string) {
+    const lines = rawEvent.split('\n')
+    const event = lines.find((line) => line.startsWith('event:'))?.slice('event:'.length).trim()
+    const rawData = lines.filter((line) => line.startsWith('data:'))
+      .map((line) => line.slice('data:'.length).trim()).join('\n')
+    if (!event || !rawData) return
+    let data: Record<string, unknown>
+    try {
+      data = JSON.parse(rawData) as Record<string, unknown>
+    } catch {
+      throw new Error('Respons percakapan tidak dapat dibaca. Silakan coba lagi.')
+    }
+    if (event === 'status') {
+      const stage = data.stage
+      if (stage === 'retrieving' || stage === 'generating' || stage === 'attributing') callbacks.onStatus(stage)
+      return
+    }
+    if (event === 'sentence') {
+      if (typeof data.text !== 'string' || !data.text.trim()) throw new Error('Respons percakapan tidak lengkap. Silakan coba lagi.')
+      callbacks.onSentence({
+        text: data.text,
+        citations: Array.isArray(data.citations) ? data.citations as ChatCitation[] : [],
+        source_status: data.source_status as GroundingMetadata['source_status'],
+        corpus_version: typeof data.corpus_version === 'string' ? data.corpus_version : null,
+      })
+      return
+    }
+    if (event === 'complete') {
+      completed = {
+        citations: Array.isArray(data.citations) ? data.citations as ChatCitation[] : [],
+        source_status: data.source_status as GroundingMetadata['source_status'],
+        corpus_version: typeof data.corpus_version === 'string' ? data.corpus_version : null,
+      }
+      return
+    }
+    if (event === 'error') {
+      throw new Error(typeof data.message === 'string' ? data.message : 'Jawaban bersumber belum dapat disiapkan.')
+    }
+  }
+
+  try {
+    while (true) {
+      const { done, value } = await reader.read()
+      buffered += decoder.decode(value || new Uint8Array(), { stream: !done }).replace(/\r\n/g, '\n')
+      let boundary = buffered.indexOf('\n\n')
+      while (boundary >= 0) {
+        consumeEvent(buffered.slice(0, boundary))
+        buffered = buffered.slice(boundary + 2)
+        boundary = buffered.indexOf('\n\n')
+      }
+      if (done) break
+    }
+  } finally {
+    reader.releaseLock()
+  }
+
+  if (!completed) throw new Error('Percakapan terputus sebelum jawaban selesai. Silakan coba lagi.')
+  return completed
 }
 
 export function getSuggestedQuestions(options: {

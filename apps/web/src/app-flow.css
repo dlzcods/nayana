@@ -2426,6 +2426,7 @@
   .app-history-chat__thread h2 { font-size: 34px; }
   .app-history-chat__messages { min-height: 312px; max-height: 62dvh; }
   .app-history-chat__compose { position: sticky; bottom: 0; padding-bottom: calc(8px + env(safe-area-inset-bottom)); background: #f7f7f5; }
+  .app-history-chat__disclaimer { margin-top: 0; font-size: 10px; line-height: 1.4; }
   .app-result:not(.app-result--loading) { padding-top: 36px; }
 }
 
