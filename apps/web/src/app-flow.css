@@ -362,7 +362,7 @@
   letter-spacing: .11em;
   text-transform: uppercase;
 }
-.executive-summary__overview > p:last-child,
+.executive-summary__overview > p:not(.executive-summary__label),
 .executive-summary__next > p:last-child {
   margin: 14px 0 0;
   color: #575960;
@@ -2331,6 +2331,7 @@
 .app-history-chat__compose input:focus-visible { box-shadow: 0 0 0 2px #dbe2fa; }
 .app-history-chat__compose button { width: 48px; height: 48px; border: 0; border-radius: 50%; background: var(--optic-blue); color: #fff; font-size: 21px; cursor: pointer; }
 .app-history-chat__compose button:disabled { background: #afb8d9; cursor: not-allowed; }
+.app-history-chat__disclaimer { grid-column: 1 / -1; margin: 1px 0 0; color: #74767c; font-size: 11px; line-height: 1.45; text-align: center; }
 
 @media (max-width: 920px) {
   .app-history-workspace { grid-template-columns: minmax(225px, .62fr) minmax(0, 1.38fr); }
