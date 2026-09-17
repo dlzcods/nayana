@@ -241,6 +241,20 @@ def load_model():
     return tf.saved_model.load(str(MODEL_PATH))
 
 
+@app.on_event("startup")
+def preload_screening_runtime() -> None:
+    """Move model and retrieval initialization into container startup.
+
+    Modal's ``min_containers`` keeps the ASGI container available after deploy;
+    loading these local artifacts here ensures the first screening or sourced
+    chat does not also pay their initialization cost.
+    """
+    load_model()
+    if rag_enabled():
+        from rag.retrieve import get_retriever
+        get_retriever()
+
+
 def predict_image(image: Image.Image) -> list[Prediction]:
     resized = image.convert("RGB").resize((224, 224))
 
