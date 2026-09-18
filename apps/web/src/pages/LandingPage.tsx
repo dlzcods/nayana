@@ -43,7 +43,6 @@ export function LandingPage() {
           </motion.div>
           <motion.figure className="optic-hero__image" initial={reduceMotion ? undefined : { opacity: 0, x: 28 }} animate={{ opacity: 1, x: 0 }} transition={{ duration: reduceMotion ? 0 : 0.75, delay: reduceMotion ? 0 : 0.12 }}>
             <img src="/assets/eye-original/slit-lamp-examination-wide.jpg" alt="Dokter memeriksa mata pasien menggunakan slit lamp" />
-            <figcaption><span>Pemeriksaan profesional</span><span>01 / 09</span></figcaption>
           </motion.figure>
         </section>
 
