@@ -21,6 +21,12 @@ import { SuggestedQuestionStarter } from '../components/SuggestedQuestionStarter
 import { ChatSources } from '../components/ChatSources'
 import type { ChatCitation } from '../lib/screening-api'
 
+type OverviewPreference = 'auto' | 'expanded' | 'collapsed'
+
+function initialOverviewPreference(): OverviewPreference {
+  return window.matchMedia('(max-width: 620px)').matches ? 'collapsed' : 'auto'
+}
+
 function renderInlineMarkdown(text: string, renderCitation: (text: string) => ReactNode): ReactNode[] {
   return text.split(/(\*\*[^*]+\*\*|\*[^*]+\*)/g).filter(Boolean).map((part, index) => {
     if (part.startsWith('**') && part.endsWith('**')) return <strong key={index}>{renderCitation(part.slice(2, -2))}</strong>
@@ -87,7 +93,7 @@ export function ScreeningChatPage() {
   const [streamStatus, setStreamStatus] = useState<ScreeningChatStreamStatus | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [failedQuestion, setFailedQuestion] = useState<string | null>(null)
-  const [overviewPreference, setOverviewPreference] = useState<'auto' | 'expanded' | 'collapsed'>('auto')
+  const [overviewPreference, setOverviewPreference] = useState<OverviewPreference>(initialOverviewPreference)
   const [temporaryAccessApproved, setTemporaryAccessApproved] = useState(() => getActiveScreening(screeningId)?.chatAccess === 'temporary')
   const initialQuestionSent = useRef(false)
   const roomEpoch = useRef(0)
@@ -108,7 +114,7 @@ export function ScreeningChatPage() {
     setIsLoadingContext(true)
     setError(null)
     setFailedQuestion(null)
-    setOverviewPreference('auto')
+    setOverviewPreference(initialOverviewPreference())
     setMessages(getSessionChat(screeningId))
     initialQuestionSent.current = false
     initialMessagesPositioned.current = false
@@ -331,7 +337,7 @@ export function ScreeningChatPage() {
                 </div>
               </header>
               <div
-                className="app-history-chat__messages"
+                className={`app-history-chat__messages ${messages.length || isSending ? 'is-active' : 'is-empty'}`}
                 aria-live="polite"
                 ref={messagesRef}
                 onScroll={(event) => {

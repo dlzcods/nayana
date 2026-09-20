@@ -8,6 +8,12 @@ import { getConversationMessages, getOrCreateConversation, saveConversationMessa
 import { getAccountHistoryRecord, getAccountPhoto, screeningFromHistory, type ScreeningHistoryItem } from '../lib/screening-history'
 import { SuggestedQuestionStarter } from '../components/SuggestedQuestionStarter'
 
+type OverviewPreference = 'auto' | 'expanded' | 'collapsed'
+
+function initialOverviewPreference(): OverviewPreference {
+  return window.matchMedia('(max-width: 620px)').matches ? 'collapsed' : 'auto'
+}
+
 function percentage(value: number) {
   return `${Math.round(value * 100)}%`
 }
@@ -23,7 +29,7 @@ export function HistoryChatPage() {
   const [isSending, setIsSending] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [failedQuestion, setFailedQuestion] = useState<string | null>(null)
-  const [overviewPreference, setOverviewPreference] = useState<'auto' | 'expanded' | 'collapsed'>('auto')
+  const [overviewPreference, setOverviewPreference] = useState<OverviewPreference>(initialOverviewPreference)
   const messagesRef = useRef<HTMLDivElement | null>(null)
   const shouldFollowMessages = useRef(false)
   const initialMessagesPositioned = useRef(false)
@@ -45,7 +51,7 @@ export function HistoryChatPage() {
     setIsLoading(true)
     setError(null)
     setFailedQuestion(null)
-    setOverviewPreference('auto')
+    setOverviewPreference(initialOverviewPreference())
     setMessages([])
     initialQuestionSent.current = false
     initialMessagesPositioned.current = false
@@ -251,7 +257,7 @@ export function HistoryChatPage() {
                 </div>
               </header>
               <div
-                className="app-history-chat__messages"
+                className={`app-history-chat__messages ${messages.length || isSending ? 'is-active' : 'is-empty'}`}
                 aria-live="polite"
                 ref={messagesRef}
                 onScroll={(event) => {
