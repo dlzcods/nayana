@@ -3099,6 +3099,24 @@
   .result-evidence__score { align-items: flex-start; flex-direction: column; gap: 4px; }
 }
 
+/* The first chat state needs an immediately useful next step even when the
+   optional prompt endpoint has not responded yet. Keep the prompts close to
+   the composer, and compact mobile context to one expandable result bar. */
+.app-history-chat__starter { margin-top: 16px; padding: 0; border: 0; background: transparent; }
+.app-history-chat__starter-head > p { color: #686d72; font-size: 12px; }
+.app-history-chat__starter > div { margin-top: 12px; }
+.app-history-chat__starter button { min-height: 38px; padding-inline: 15px; font-size: 12px; }
+
+@media (max-width: 620px) {
+  .app-history-chat__context { padding: 16px; }
+  .app-history-chat__overview-toggle { margin-top: 12px; }
+  .app-history-chat__mobile-overview { display: none; }
+  .app-history-chat__context.is-collapsed,
+  .app-history-chat__context.is-expanded { padding-bottom: 16px; }
+  .app-history-chat__thread { min-height: calc(100dvh - 166px); padding-top: 22px; }
+  .app-history-chat__messages { min-height: 286px; }
+}
+
 /* Saved-history preview follows the same compact result report hierarchy. */
 .app-history-detail { padding: clamp(24px, 3.2vw, 38px); background: #fff; }
 .app-history-detail__hero { grid-template-columns: minmax(210px, 300px) minmax(0, 1fr); gap: clamp(24px, 3.5vw, 42px); }

@@ -189,7 +189,6 @@ export function ScreeningChatPage() {
           question: cleanQuestion,
           memory: compactConversationMemory(nextMessages.slice(0, -1)),
         }
-        let response: Omit<ScreeningChatMessage, 'role' | 'content'> & { answer?: string }
         let streamedContent = ''
         let streamedMetadata: Omit<ScreeningChatMessage, 'role' | 'content'> = {}
         const metadata = await streamScreeningQuestion(requestOptions, {
@@ -206,7 +205,7 @@ export function ScreeningChatPage() {
           },
         })
         if (!streamedContent) throw new Error('Sumber NEI belum cukup untuk menampilkan jawaban yang dapat diverifikasi.')
-        response = { ...streamedMetadata, ...metadata, answer: streamedContent }
+        const response = { ...streamedMetadata, ...metadata, answer: streamedContent }
         if (epoch !== roomEpoch.current) return
         const completed: ScreeningChatMessage[] = [...nextMessages, {
           ...response,

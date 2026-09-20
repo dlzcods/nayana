@@ -17,9 +17,10 @@ type ScreeningSaveActionsProps = {
   normalizedImage?: Blob | null
   initialDestination?: { kind: 'account'; recordId: string } | { kind: 'browser' } | null
   onSaved?: (destination: { kind: 'account'; recordId: string } | { kind: 'browser' }) => void
+  purpose?: 'save-result' | 'unlock-chat'
 }
 
-export function ScreeningSaveActions({ result, summary, normalizedImage, initialDestination = null, onSaved }: ScreeningSaveActionsProps) {
+export function ScreeningSaveActions({ result, summary, normalizedImage, initialDestination = null, onSaved, purpose = 'save-result' }: ScreeningSaveActionsProps) {
   const [retention, setRetention] = useState<RetentionDays>(30)
   const [state, setState] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle')
   const [message, setMessage] = useState('')
@@ -87,10 +88,14 @@ export function ScreeningSaveActions({ result, summary, normalizedImage, initial
   return (
     <section className="screening-save" aria-labelledby={`save-${result.screening_id}`}>
       <div>
-        <p className="app-kicker">Simpan untuk nanti</p>
-        <h2 id={`save-${result.screening_id}`}>{hasAccount ? 'Kembali ke hasil ini kapan saja.' : 'Simpan sementara di browser.'}</h2>
+        <p className="app-kicker">{purpose === 'unlock-chat' ? 'Simpan untuk berdiskusi' : 'Simpan untuk nanti'}</p>
+        <h2 id={`save-${result.screening_id}`}>{purpose === 'unlock-chat' ? 'Simpan hasil untuk membuka Tanya NAYANA.' : hasAccount ? 'Kembali ke hasil ini kapan saja.' : 'Simpan sementara di browser.'}</h2>
         <p>
-          {hasAccount
+          {purpose === 'unlock-chat'
+            ? hasAccount
+              ? 'Hasil yang tersimpan dapat dibuka kembali bersama ruang percakapannya. Foto yang Anda unggah tersimpan privat di akun.'
+              : 'Hasil dapat disimpan di browser selama 3 hari untuk membuka ruang percakapan. Foto tidak disimpan.'
+            : hasAccount
             ? 'Foto yang Anda unggah disimpan privat bersama hasil. Anda dapat menghapusnya kapan saja dari akun.'
             : 'Tanpa akun, ringkasan hasil tersimpan lokal selama 3 hari. Foto tidak disimpan.'}
         </p>
