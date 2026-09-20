@@ -54,7 +54,7 @@ export function LocalHistoryPage() {
                   <button
                     className={`app-local-history__row${isSelected ? ' is-selected' : ''}`}
                     type="button"
-                    aria-pressed={isSelected}
+                    aria-current={isSelected ? 'page' : undefined}
                     key={result.screening_id}
                     onClick={() => setSelectedId(result.screening_id)}
                   >

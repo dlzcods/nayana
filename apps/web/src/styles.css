@@ -243,7 +243,7 @@ h1, h2, h3 { font-family: 'IBM Plex Sans', Arial, sans-serif; font-weight: 500; 
 
 .document__back { display: inline-block; margin-bottom: 38px; color: var(--blue); font-size: 12px; border-bottom: 1px solid #a9b6bc; padding-bottom: 5px; }
 
-.document h1 { margin: 0; font-family: 'IBM Plex Sans', Arial, sans-serif; font-weight: 500; font-size: clamp(48px, 7vw, 78px); line-height: .98; letter-spacing: -.055em; }
+.document h1 { margin: 0; font-family: 'IBM Plex Sans', Arial, sans-serif; font-weight: 500; font-size: clamp(42px, 5.5vw, 64px); line-height: 1; letter-spacing: -.05em; }
 
 .document__lead { margin: 30px 0 80px; max-width: 700px; color: #52616a; font-size: 17px; line-height: 1.7; }
 
@@ -357,7 +357,7 @@ h1, h2, h3 { font-family: 'IBM Plex Sans', Arial, sans-serif; font-weight: 500; 
   .site-footer__bottom { padding-block: 20px; align-items: flex-start; flex-direction: column; justify-content: center; }
   .document { padding-block: 56px 90px; }
   .document__back { margin-bottom: 50px; }
-  .document h1 { font-size: 34px; line-height: 1.08; }
+  .document h1 { font-size: 31px; line-height: 1.08; }
   .document__lead { margin-bottom: 60px; font-size: 15px; }
   .evidence-table div { grid-template-columns: 1fr; gap: 6px; }
   .evidence-table dd { text-align: left; }

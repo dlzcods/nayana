@@ -1,4 +1,4 @@
-import { BrandMark } from '../components/BrandMark'
+import { SiteHeader } from '../components/SiteHeader'
 
 type LegalPageProps = {
   kind: 'privacy' | 'terms' | 'trust' | 'not-found'
@@ -51,7 +51,7 @@ export function LegalPage({ kind }: LegalPageProps) {
   const content = legalContent[kind]
   return (
     <div className="legal-page">
-      <header className="legal-page__header shell"><BrandMark /></header>
+      <SiteHeader />
       <main className="document shell">
         <a className="document__back" href="/">← Kembali ke halaman utama</a>
         <p className="eyebrow">{content.eyebrow}</p>
