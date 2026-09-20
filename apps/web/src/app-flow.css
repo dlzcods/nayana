@@ -1051,6 +1051,11 @@
 .export-sheet > p:not(.export-sheet__handle) { margin: 14px 0 18px; color: #5f6469; line-height: 1.55; }
 .export-sheet__items { border-top: 1px solid var(--optic-line); }
 .export-sheet__items label { min-height: 62px; display: flex; align-items: center; gap: 16px; border-bottom: 1px solid var(--optic-line); color: var(--optic-ink); }
+.export-sheet__items label span { min-width: 0; display: grid; gap: 3px; }
+.export-sheet__items label strong { font-size: 13px; font-weight: 600; }
+.export-sheet__items label small { color: #73777a; font-size: 11px; line-height: 1.45; }
+.export-sheet__doctor-kit { width: fit-content; min-height: 42px; margin-top: 12px; }
+.export-sheet > .export-sheet__error { margin: 14px 0 0; color: #a13d28; font-size: 12px; }
 .export-sheet .app-primary-action { width: 100%; margin-top: 24px; }
 
 @media (max-width: 680px) {

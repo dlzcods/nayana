@@ -169,6 +169,7 @@ export function ScreeningResultPage() {
                   screening={result}
                   summary={summary}
                   imageUrl={demoCaseImageUrl(result.case_id || '') || null}
+                  doctorKitHref={`/screening/results/${encodeURIComponent(screeningId)}/discussion`}
                 />
               </div>
             </section>

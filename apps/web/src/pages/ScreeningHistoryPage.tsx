@@ -341,10 +341,6 @@ export function ScreeningHistoryPage() {
                       screening={screeningFromHistory(selected)}
                       summary={selected.executive_summary}
                       imageUrl={selectedPhotoUrl || selectedDemoImageUrl || null}
-                      imageDownloadName={selected.source === 'upload'
-                        ? 'nayana-foto-fundus-' + selected.id + '.jpg'
-                        : 'nayana-gambar-contoh-' + selected.id + (selectedDemoImageUrl.endsWith('.jpg') ? '.jpg' : '.png')}
-                      imageDownloadLabel={selected.source === 'upload' ? 'Unduh foto fundus (JPEG)' : 'Unduh gambar contoh'}
                       discussionQuestions={discussionQuestions}
                     />
                   </div>
