@@ -238,7 +238,7 @@ def case_image_path(case: dict[str, str]) -> Path:
 @lru_cache(maxsize=1)
 def load_model():
     if not MODEL_PATH.is_dir():
-        raise RuntimeError("Artefak model belum tersedia. Jalankan download-model.sh terlebih dahulu.")
+        raise RuntimeError("Artefak model belum tersedia. Jalankan ./apps/inference/tools/download-model.sh sebelum inference lokal.")
     return tf.saved_model.load(str(MODEL_PATH))
 
 

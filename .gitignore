@@ -38,7 +38,6 @@ tmp/
 
 # Internal development notes are kept locally and are not repository content.
 docs/
-scripts/
 
 # The trained model is restored from the Hugging Face Space.
 # Keep it locally for inference, but do not place the 80 MB artifact in Git.

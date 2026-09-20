@@ -11,7 +11,7 @@
   ],
   "scripts": {
     "dev:web": "npm run dev --workspace=nayana-web",
-    "check:structure": "bash scripts/check-structure.sh",
+    "check:structure": "bash tools/repository/check-structure.sh",
     "check:css": "npm run check:css --workspace=nayana-web",
     "lint": "npm run lint --workspace=nayana-web",
     "build": "npm run build --workspace=nayana-web",

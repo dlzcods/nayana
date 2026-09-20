@@ -69,6 +69,12 @@ Untuk menjalankan Chat NAYANA melalui Netra Runtime, tambahkan `NETRA_API_KEY` k
 
 ## Deploy layanan backend
 
+Sebelum deploy pertama dari clone baru, pulihkan artefak model yang tidak disimpan di Git:
+
+```bash
+./apps/inference/tools/download-model.sh
+```
+
 Setelah `modal setup` selesai dan secret sudah tersedia, jalankan dari `apps/inference`:
 
 ```bash

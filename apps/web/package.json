@@ -5,7 +5,7 @@
   "type": "module",
   "scripts": {
     "dev": "vite --host 0.0.0.0",
-    "check:css": "node scripts/check-css.mjs",
+    "check:css": "node tools/check-css.mjs",
     "prebuild": "npm run check:css",
     "build": "tsc -b && vite build",
     "prelint": "npm run check:css",

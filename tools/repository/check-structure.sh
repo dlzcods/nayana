@@ -3,7 +3,7 @@
 set -euo pipefail
 
 script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-repo_root="$(cd "${script_dir}/.." && pwd)"
+repo_root="$(cd "${script_dir}/../.." && pwd)"
 cd "${repo_root}"
 
 required_paths=(
@@ -27,8 +27,6 @@ done
 
 forbidden_paths=(
     "services/inference"
-    "docs/copywriting"
-    "docs/project"
     "apps/inference/exp_eye_images"
     "apps/inference/notebook"
     "apps/web/ASSET_CATALOG.md"
@@ -42,8 +40,8 @@ for forbidden_path in "${forbidden_paths[@]}"; do
     fi
 done
 
-if ! rg -Fxq "docs/internal/" .gitignore; then
-    echo "docs/internal/ must remain ignored." >&2
+if ! rg -Fxq "docs/" .gitignore; then
+    echo "docs/ must remain ignored." >&2
     exit 1
 fi
 
@@ -52,12 +50,13 @@ if ! rg -Fxq "apps/inference/model/" .gitignore; then
     exit 1
 fi
 
-stale_pattern="services/inference|exp_eye_images|README_HF|docs/copywriting|docs/project"
+stale_pattern="services/inference|exp_eye_images|README_HF"
 if rg -n "${stale_pattern}" . \
+    --glob '!docs/**' \
     --glob '!apps/web/node_modules/**' \
     --glob '!apps/web/dist/**' \
     --glob '!apps/inference/model/**' \
-    --glob '!scripts/check-structure.sh'; then
+    --glob '!tools/repository/check-structure.sh'; then
     echo "Stale path reference detected." >&2
     exit 1
 fi
@@ -79,7 +78,7 @@ if [[ -d apps/inference/model ]]; then
         shasum -a 256 -c model.sha256
     )
 else
-    echo "Model directory absent; run ./scripts/download-model.sh before inference."
+    echo "Model directory absent; run ./apps/inference/tools/download-model.sh before local inference."
 fi
 
 echo "Repository structure guard passed."
