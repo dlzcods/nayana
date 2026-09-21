@@ -1,5 +1,4 @@
 gradio==5.33.2
-google-genai
 markdown2
 tensorflow
 numpy

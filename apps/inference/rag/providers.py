@@ -1,8 +1,9 @@
-"""Small, explicit provider adapters for the one RAG generation call.
+"""Netra Runtime adapter for NAYANA's text-only LLM calls.
 
-Retrieval and server-owned citation attribution never vary by provider.  This
-module only normalises the provider request into the JSON text expected by the
-existing RAG parser.
+Modal owns screening inference, retrieval, citation attribution, and report
+generation. This module sends only the minimum text context required for
+Chat NAYANA or a structured result explanation to Netra Runtime. Fundus photos
+never enter this request path.
 """
 from __future__ import annotations
 
@@ -15,10 +16,7 @@ from urllib.error import HTTPError, URLError
 from urllib.request import Request, urlopen
 
 
-OPENROUTER_CHAT_URL = "https://openrouter.ai/api/v1/chat/completions"
 NETRA_CHAT_URL = "https://api.netraruntime.com/v1/chat/completions"
-DEFAULT_GEMINI_RAG_MODEL = "gemma-4-31b-it"
-DEFAULT_OPENROUTER_RAG_MODEL = "google/gemma-4-26b-a4b-it"
 DEFAULT_NETRA_RAG_MODEL = "deepseek/deepseek-v4-flash-0731"
 logger = logging.getLogger(__name__)
 
@@ -41,7 +39,7 @@ class ProviderCompletion:
 
 
 class ProviderRequestError(RuntimeError):
-    """Provider HTTP failure with safe fields for operational logs only."""
+    """Provider failure with safe fields for operational logs only."""
 
     def __init__(self, status_code: int | None, status: str, message: str) -> None:
         self.status_code = status_code
@@ -51,104 +49,31 @@ class ProviderRequestError(RuntimeError):
 
 
 def selected_rag_provider(environ: dict[str, str] | None = None) -> RagProvider:
-    """Resolve the provider without silently changing a production default."""
+    """Resolve the single production LLM route without a silent fallback."""
+
     env = os.environ if environ is None else environ
-    name = env.get("NAYANA_RAG_PROVIDER", "gemini").strip().lower()
-    if name == "gemini":
-        return RagProvider(
-            name=name,
-            model=env.get("NAYANA_RAG_GEMINI_MODEL", DEFAULT_GEMINI_RAG_MODEL).strip(),
-            api_key=env.get("GEMINI_API_KEY", "").strip(),
-        )
-    if name == "openrouter":
-        return RagProvider(
-            name=name,
-            model=env.get("NAYANA_RAG_OPENROUTER_MODEL", DEFAULT_OPENROUTER_RAG_MODEL).strip(),
-            api_key=env.get("OPENROUTER_API_KEY", "").strip(),
-        )
-    if name == "netra":
-        return RagProvider(
-            name=name,
-            model=env.get("NAYANA_RAG_NETRA_MODEL", DEFAULT_NETRA_RAG_MODEL).strip(),
-            api_key=env.get("NETRA_API_KEY", "").strip(),
-        )
-    raise ValueError("NAYANA_RAG_PROVIDER must be 'gemini', 'openrouter', or 'netra'")
-
-
-def openrouter_completion(*, provider: RagProvider, instruction: str, payload: str,
-                          timeout_ms: int, max_output_tokens: int) -> ProviderCompletion:
-    """Make one non-streaming OpenRouter request while preserving JSON contract.
-
-    Non-streaming is intentional for this short one-field response.  It avoids
-    adding a second SSE parser while leaving Gemini's existing stream handling
-    untouched, so this experiment isolates provider routing rather than client
-    stream parsing.
-    """
-    body = {
-        "model": provider.model,
-        "messages": [
-            {"role": "system", "content": instruction},
-            {"role": "user", "content": payload},
-        ],
-        "max_tokens": max_output_tokens,
-        "temperature": 0.2,
-        "response_format": {"type": "json_object"},
-    }
-    request = Request(
-        OPENROUTER_CHAT_URL,
-        data=json.dumps(body, ensure_ascii=False).encode("utf-8"),
-        headers={
-            "Authorization": f"Bearer {provider.api_key}",
-            "Content-Type": "application/json",
-            # Lets our safe telemetry report the routed provider without
-            # logging prompt, evidence, or generated content.
-            "X-OpenRouter-Metadata": "enabled",
-        },
-        method="POST",
+    name = env.get("NAYANA_RAG_PROVIDER", "netra").strip().lower()
+    if name != "netra":
+        raise ValueError("NAYANA_RAG_PROVIDER must be 'netra'")
+    return RagProvider(
+        name="netra",
+        model=env.get("NAYANA_RAG_NETRA_MODEL", DEFAULT_NETRA_RAG_MODEL).strip(),
+        api_key=env.get("NETRA_API_KEY", "").strip(),
     )
-    try:
-        with urlopen(request, timeout=timeout_ms / 1000) as response:
-            raw = response.read()
-    except HTTPError as error:
-        try:
-            body = json.loads(error.read().decode("utf-8", errors="replace"))
-        except json.JSONDecodeError:
-            body = {}
-        provider_error = body.get("error", {}) if isinstance(body, dict) else {}
-        raise ProviderRequestError(error.code, "HTTP_ERROR", str(provider_error.get("message", "OpenRouter request failed"))) from None
-    except URLError as error:
-        raise ProviderRequestError(None, "NETWORK_ERROR", str(error.reason)) from None
-
-    try:
-        decoded = json.loads(raw)
-        content = decoded["choices"][0]["message"]["content"]
-    except (IndexError, KeyError, TypeError, json.JSONDecodeError) as error:
-        raise ProviderRequestError(None, "INVALID_RESPONSE", "OpenRouter returned no usable assistant content") from error
-    if not isinstance(content, str) or not content.strip():
-        raise ProviderRequestError(None, "EMPTY_RESPONSE", "OpenRouter returned empty assistant content")
-
-    metadata = decoded.get("openrouter_metadata", {}) if isinstance(decoded, dict) else {}
-    route = metadata.get("provider_name") if isinstance(metadata, dict) else None
-    usage = decoded.get("usage") if isinstance(decoded, dict) and isinstance(decoded.get("usage"), dict) else None
-    return ProviderCompletion(text=content, response_count=1, text_part_count=1,
-                              usage=usage, route=route if isinstance(route, str) else None)
 
 
 def netra_completion(*, provider: RagProvider, instruction: str, payload: str,
                      timeout_ms: int, max_output_tokens: int,
                      response_schema: dict | None = None) -> ProviderCompletion:
-    """Complete the legacy JSON endpoint through Netra without Gemini fallback.
+    """Make one non-streaming, reasoning-excluded Netra completion request."""
 
-    The browser no longer uses this compatibility path, but retained callers
-    must receive the same schema-safe answer contract as the streaming route.
-    """
     local_request_id = uuid.uuid4().hex
     response_format: dict[str, object] = {"type": "json_object"}
     if response_schema is not None:
         response_format = {
             "type": "json_schema",
             "json_schema": {
-                "name": "nayana_grounded_answer",
+                "name": "nayana_response",
                 "strict": True,
                 "schema": response_schema,
             },
@@ -178,7 +103,7 @@ def netra_completion(*, provider: RagProvider, instruction: str, payload: str,
     try:
         with urlopen(request, timeout=timeout_ms / 1000) as response:
             raw = response.read()
-            netra_request_id = response.headers.get("X-Request-Id") or local_request_id
+            request_id = response.headers.get("X-Request-Id") or local_request_id
     except HTTPError as error:
         raise ProviderRequestError(error.code, "HTTP_ERROR", "Netra request failed") from None
     except URLError as error:
@@ -193,82 +118,14 @@ def netra_completion(*, provider: RagProvider, instruction: str, payload: str,
         raise ProviderRequestError(None, "EMPTY_RESPONSE", "Netra returned empty assistant content")
 
     usage = decoded.get("usage") if isinstance(decoded, dict) and isinstance(decoded.get("usage"), dict) else None
-    logger.warning("Netra completion usage request_id=%s usage=%s", netra_request_id, usage)
-    return ProviderCompletion(text=content, response_count=1, text_part_count=1, usage=usage,
-                              route="netra")
-
-
-def openrouter_text_stream(*, provider: RagProvider, instruction: str, payload: str,
-                           timeout_ms: int, max_output_tokens: int):
-    """Yield OpenRouter text fragments without parsing or exposing them publicly.
-
-    The caller owns sentence buffering and evidence attribution. This adapter
-    only decodes provider SSE framing so the existing JSON path stays unchanged.
-    """
-    body = {
-        "model": provider.model,
-        "messages": [
-            {"role": "system", "content": instruction},
-            {"role": "user", "content": payload},
-        ],
-        "max_tokens": max_output_tokens,
-        "temperature": 0.2,
-        "stream": True,
-    }
-    request = Request(
-        OPENROUTER_CHAT_URL,
-        data=json.dumps(body, ensure_ascii=False).encode("utf-8"),
-        headers={
-            "Authorization": f"Bearer {provider.api_key}",
-            "Content-Type": "application/json",
-            "Accept": "text/event-stream",
-        },
-        method="POST",
-    )
-    try:
-        response = urlopen(request, timeout=timeout_ms / 1000)
-    except HTTPError as error:
-        try:
-            response_body = json.loads(error.read().decode("utf-8", errors="replace"))
-        except json.JSONDecodeError:
-            response_body = {}
-        provider_error = response_body.get("error", {}) if isinstance(response_body, dict) else {}
-        raise ProviderRequestError(error.code, "HTTP_ERROR", str(provider_error.get("message", "OpenRouter request failed"))) from None
-    except URLError as error:
-        raise ProviderRequestError(None, "NETWORK_ERROR", str(error.reason)) from None
-
-    received_text = False
-    try:
-        for raw_line in response:
-            line = raw_line.decode("utf-8", errors="replace").strip()
-            if not line or not line.startswith("data:"):
-                continue
-            data = line.removeprefix("data:").strip()
-            if data == "[DONE]":
-                break
-            try:
-                event = json.loads(data)
-                delta = event["choices"][0].get("delta", {})
-                content = delta.get("content") if isinstance(delta, dict) else None
-            except (IndexError, KeyError, TypeError, json.JSONDecodeError) as error:
-                raise ProviderRequestError(None, "INVALID_STREAM", "OpenRouter returned an invalid stream event") from error
-            if isinstance(content, str) and content:
-                received_text = True
-                yield content
-    finally:
-        response.close()
-    if not received_text:
-        raise ProviderRequestError(None, "EMPTY_RESPONSE", "OpenRouter returned empty assistant content")
+    logger.warning("Netra completion usage request_id=%s usage=%s", request_id, usage)
+    return ProviderCompletion(text=content, response_count=1, text_part_count=1, usage=usage, route="netra")
 
 
 def netra_text_stream(*, provider: RagProvider, instruction: str, payload: str,
                       timeout_ms: int, max_output_tokens: int):
-    """Yield Netra content deltas internally for sentence-level attribution.
+    """Yield only visible content deltas for server-side citation attribution."""
 
-    The Netra request is text-only with low reasoning effort. Reasoning output,
-    raw content deltas, and provider metadata never leave this module for the
-    browser.
-    """
     local_request_id = uuid.uuid4().hex
     body = {
         "model": provider.model,
@@ -301,7 +158,7 @@ def netra_text_stream(*, provider: RagProvider, instruction: str, payload: str,
     except URLError as error:
         raise ProviderRequestError(None, "NETWORK_ERROR", str(error.reason)) from None
 
-    netra_request_id = response.headers.get("X-Request-Id") or local_request_id
+    request_id = response.headers.get("X-Request-Id") or local_request_id
     received_text = False
     finish_reason = None
     data_lines: list[str] = []
@@ -334,7 +191,7 @@ def netra_text_stream(*, provider: RagProvider, instruction: str, payload: str,
                 raise ProviderRequestError(None, "STREAM_ERROR", "Netra stream ended with an error")
             usage = event.get("usage")
             if isinstance(usage, dict):
-                logger.warning("Netra stream usage request_id=%s usage=%s", netra_request_id, usage)
+                logger.warning("Netra stream usage request_id=%s usage=%s", request_id, usage)
             choices = event.get("choices") or []
             if not choices:
                 continue

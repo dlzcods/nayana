@@ -61,11 +61,11 @@ VITE_SUPABASE_URL="https://PROJECT-REF.supabase.co"
 VITE_SUPABASE_PUBLISHABLE_KEY="sb_publishable_..."
 ```
 
-Jangan menaruh API key Gemini, OpenRouter, Netra, atau Firecrawl di file frontend. Key tersebut hanya disimpan di environment backend atau Modal Secret.
+Jangan menaruh `NETRA_API_KEY` atau `FIRECRAWL_API_KEY` di file frontend. Key tersebut hanya disimpan di environment backend atau Modal Secret. `VITE_SUPABASE_PUBLISHABLE_KEY` memang digunakan oleh browser; keamanan data akun bergantung pada konfigurasi Row Level Security (RLS) di Supabase, bukan pada kerahasiaan key tersebut.
 
 Chat NAYANA menggunakan source-attributed SSE. Antarmuka hanya menerima kalimat setelah server menemukan dukungan evidence dan marker sitasi; provider delta tidak pernah dikirim ke browser.
 
-Untuk menjalankan Chat NAYANA melalui Netra Runtime, tambahkan `NETRA_API_KEY` ke Modal Secret `nayana`, lalu set `NAYANA_RAG_PROVIDER=netra` dan `NAYANA_RAG_NETRA_MODEL=deepseek/deepseek-v4-flash-0731`. Adapter Netra mengirim teks pertanyaan, konteks hasil, dan evidence NEI saja. Foto fundus tidak pernah masuk ke request model bahasa.
+Ringkasan NAYANA dan Chat NAYANA berjalan melalui Netra Runtime dengan `deepseek/deepseek-v4-flash-0731`. Tambahkan `NETRA_API_KEY` ke Modal Secret `nayana`, lalu set `NAYANA_RAG_PROVIDER=netra` dan `NAYANA_RAG_NETRA_MODEL=deepseek/deepseek-v4-flash-0731`. Modal tetap menjalankan backend skrining, retrieval RAG, verifikasi sitasi, dan PDF. Adapter Netra hanya mengirim teks pertanyaan, konteks hasil, dan evidence NEI. Foto fundus tidak pernah masuk ke request model bahasa.
 
 ## Deploy layanan backend
 
@@ -106,6 +106,10 @@ NAYANA adalah pendamping skrining awal, bukan alat diagnosis. Bila ada keluhan, 
 
 ## Sumber model
 
-Model, contoh foto, notebook, dan lisensi berasal dari project sumber dan Hugging Face Space [`dielz/eye-disease-classification`](https://huggingface.co/spaces/dielz/eye-disease-classification). Lisensi sumber tersedia di `third_party/eye-disease-classification/LICENSE.txt`.
+Model, contoh foto, notebook, dan lisensi berasal dari project sumber dan Hugging Face Space [`dielz/eye-disease-classification`](https://huggingface.co/spaces/dielz/eye-disease-classification). Lisensi sumber tersedia di `third_party/eye-disease-classification/LICENSE.txt`. Rincian batas lisensi NAYANA, aset pihak ketiga, dan sumber edukasi ada di [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).
+
+## Lisensi repositori
+
+Repositori ini bersifat *source-available*, bukan proyek *open source*. Kode NAYANA boleh ditinjau dan dijalankan dalam lingkungan terkendali untuk pembelajaran, riset, demonstrasi, atau evaluasi, tetapi tidak boleh digunakan ulang, dipublikasikan ulang, dideploy, atau dijadikan turunan tanpa izin tertulis. Ketentuan lengkap ada di [LICENSE](LICENSE).
 
 Versi English tersedia di [README.en.md](README.en.md).

@@ -42,7 +42,6 @@ MODEL_VERSION = "eye-disease-classification-savedmodel"
 MAX_UPLOAD_BYTES = 10 * 1024 * 1024
 MIN_IMAGE_DIMENSION = 224
 MAX_IMAGE_DIMENSION = 4096
-DEFAULT_GEMINI_MODEL = "gemma-4-26b-a4b-it"
 # Modal permits this endpoint to execute for 300 seconds. Keep the provider
 # deadline aligned so an otherwise active generation is not cut off at 120s.
 # This is operational configuration, not a secret or Modal environment variable.
@@ -194,6 +193,53 @@ class SuggestedQuestionRequest(BaseModel):
 
 class SuggestedQuestionResponse(BaseModel):
     questions: list[SuggestedQuestion] = Field(min_length=6, max_length=6)
+
+
+EXECUTIVE_SUMMARY_SCHEMA = {
+    "type": "object",
+    "properties": {
+        "title": {"type": "string"},
+        "overview": {"type": "string"},
+        "general_information": {"type": "string"},
+        "common_factors": {"type": "string"},
+        "what_to_notice": {"type": "string"},
+        "next_step": {"type": "string"},
+        "disclaimer": {"type": "string"},
+    },
+    "required": [
+        "title", "overview", "general_information", "common_factors",
+        "what_to_notice", "next_step", "disclaimer",
+    ],
+    "additionalProperties": False,
+}
+SUGGESTED_QUESTIONS_SCHEMA = {
+    "type": "object",
+    "properties": {
+        "questions": {
+            "type": "array",
+            "minItems": 6,
+            "maxItems": 6,
+            "items": {
+                "type": "object",
+                "properties": {
+                    "id": {"type": "string"},
+                    "question": {"type": "string"},
+                    "answer": {"type": "string"},
+                },
+                "required": ["id", "question", "answer"],
+                "additionalProperties": False,
+            },
+        },
+    },
+    "required": ["questions"],
+    "additionalProperties": False,
+}
+SCREENING_CHAT_SCHEMA = {
+    "type": "object",
+    "properties": {"answer": {"type": "string"}},
+    "required": ["answer"],
+    "additionalProperties": False,
+}
 
 
 class ScreeningPdfRequest(BaseModel):
@@ -476,52 +522,42 @@ def rag_enabled() -> bool:
     return bool(os.getenv("NAYANA_RAG_VERSION", "").strip())
 
 
+def netra_json_response(instruction: str, payload: dict[str, object], response_schema: dict,
+                        max_output_tokens: int) -> str:
+    """Request structured, text-only LLM output through the Netra Runtime route."""
+
+    from rag.providers import netra_completion, selected_rag_provider
+
+    provider = selected_rag_provider()
+    if not provider.api_key:
+        raise HTTPException(status_code=503, detail="Layanan bahasa belum diaktifkan.")
+    completion = netra_completion(
+        provider=provider,
+        instruction=instruction,
+        payload=json.dumps(payload, ensure_ascii=False),
+        timeout_ms=RAG_PROVIDER_TIMEOUT_MS,
+        max_output_tokens=max_output_tokens,
+        response_schema=response_schema,
+    )
+    return completion.text
+
+
 def rag_completion(instruction: str, payload: str, response_schema: dict | None = None) -> str:
-    from rag.stream import ProviderStreamIncomplete, collect_json_stream
+    from rag.stream import ProviderStreamIncomplete
     from rag.telemetry import current_trace
-    from rag.providers import (ProviderRequestError, netra_completion,
-                               openrouter_completion, selected_rag_provider)
+    from rag.providers import netra_completion, selected_rag_provider
     provider = selected_rag_provider()
     if not provider.api_key:
         raise HTTPException(status_code=503, detail="Percakapan hasil belum diaktifkan.")
     started_at = time.monotonic()
     trace = current_trace()
     trace_id = trace["trace_id"]
-    client = None
     try:
-        if provider.name == "openrouter":
-            collected = openrouter_completion(
-                provider=provider, instruction=instruction, payload=payload,
-                timeout_ms=RAG_PROVIDER_TIMEOUT_MS, max_output_tokens=15000,
-            )
-        elif provider.name == "netra":
-            collected = netra_completion(
-                provider=provider, instruction=instruction, payload=payload,
-                timeout_ms=RAG_PROVIDER_TIMEOUT_MS, max_output_tokens=15000,
-                response_schema=response_schema,
-            )
-        else:
-            from google import genai
-            from google.genai import types
-            from rag.citations import as_genai_schema
-            client = genai.Client(api_key=provider.api_key)
-            response_stream = client.models.generate_content_stream(
-                model=provider.model,
-                contents=payload,
-                config=types.GenerateContentConfig(
-                    thinking_config=types.ThinkingConfig(thinking_level="MINIMAL", include_thoughts=False),
-                    http_options=types.HttpOptions(timeout=RAG_PROVIDER_TIMEOUT_MS),
-                    max_output_tokens=15000,
-                    temperature=0.2,
-                    response_mime_type="application/json",
-                    response_schema=as_genai_schema(response_schema, types) if response_schema is not None else None,
-                    system_instruction=instruction,
-                ),
-            )
-            # Structured-output streams are valid partial JSON strings. Join every
-            # non-thought chunk before the server parser sees it; never parse an
-            # arbitrary mid-stream fragment as a complete response.
-            collected = collect_json_stream(response_stream)
+        collected = netra_completion(
+            provider=provider, instruction=instruction, payload=payload,
+            timeout_ms=RAG_PROVIDER_TIMEOUT_MS, max_output_tokens=15000,
+            response_schema=response_schema,
+        )
         response_text = collected.text
         # See the paired retrieval trace even when the provider succeeds; the
         # default Modal log view otherwise hides INFO-level diagnostics.
@@ -567,55 +603,17 @@ def rag_completion(instruction: str, payload: str, response_schema: dict | None 
             trace.get("memory_intent"), 15000, response_schema is not None, RAG_PROVIDER_TIMEOUT_MS,
         )
         raise
-    finally:
-        if client is not None:
-            client.close()
-
-
 def rag_text_fragments(instruction: str, payload: str):
     """Yield provider prose internally for verified-sentence streaming only."""
-    from rag.providers import netra_text_stream, openrouter_text_stream, selected_rag_provider
+    from rag.providers import netra_text_stream, selected_rag_provider
 
     provider = selected_rag_provider()
     if not provider.api_key:
         raise HTTPException(status_code=503, detail="Percakapan hasil belum diaktifkan.")
-    if provider.name == "openrouter":
-        yield from openrouter_text_stream(
-            provider=provider, instruction=instruction, payload=payload,
-            timeout_ms=RAG_PROVIDER_TIMEOUT_MS, max_output_tokens=RAG_STREAM_MAX_OUTPUT_TOKENS,
-        )
-        return
-    if provider.name == "netra":
-        yield from netra_text_stream(
-            provider=provider, instruction=instruction, payload=payload,
-            timeout_ms=RAG_PROVIDER_TIMEOUT_MS, max_output_tokens=RAG_STREAM_MAX_OUTPUT_TOKENS,
-        )
-        return
-
-    from google import genai
-    from google.genai import types
-
-    client = genai.Client(api_key=provider.api_key)
-    try:
-        response_stream = client.models.generate_content_stream(
-            model=provider.model,
-            contents=payload,
-            config=types.GenerateContentConfig(
-                thinking_config=types.ThinkingConfig(thinking_level="MINIMAL", include_thoughts=False),
-                http_options=types.HttpOptions(timeout=RAG_PROVIDER_TIMEOUT_MS),
-                max_output_tokens=RAG_STREAM_MAX_OUTPUT_TOKENS,
-                temperature=0.2,
-                system_instruction=instruction,
-            ),
-        )
-        for response in response_stream:
-            candidates = getattr(response, "candidates", None) or []
-            for candidate in candidates:
-                for part in getattr(getattr(candidate, "content", None), "parts", None) or []:
-                    if not getattr(part, "thought", False) and getattr(part, "text", None):
-                        yield part.text
-    finally:
-        client.close()
+    yield from netra_text_stream(
+        provider=provider, instruction=instruction, payload=payload,
+        timeout_ms=RAG_PROVIDER_TIMEOUT_MS, max_output_tokens=RAG_STREAM_MAX_OUTPUT_TOKENS,
+    )
 
 
 def sse_event(event: str, data: dict[str, object]) -> str:
@@ -643,24 +641,11 @@ def stream_screening_chat(payload: ScreeningChatRequest):
         })
 
 
-def response_text_without_thoughts(response: object) -> str:
-    """Return only non-thought text even if a model ignores include_thoughts."""
-
-    candidates = getattr(response, "candidates", None) or []
-    text_parts: list[str] = []
-    for candidate in candidates:
-        content = getattr(candidate, "content", None)
-        for part in getattr(content, "parts", None) or []:
-            if not getattr(part, "thought", False) and getattr(part, "text", None):
-                text_parts.append(part.text)
-    return "".join(text_parts).strip() or str(getattr(response, "text", "")).strip()
-
-
 def parse_executive_summary(response_text: str) -> ExecutiveSummary:
     """Accept the one-object contract and a one-item array returned by some models.
 
-    The prompt requests a JSON object. Gemma can nevertheless wrap that object in
-    a one-item list. Normalising that harmless transport variation here keeps the
+    The prompt requests a JSON object. A model can nevertheless wrap that object
+    in a one-item list. Normalising that harmless transport variation here keeps the
     public API contract stable while rejecting ambiguous multi-item responses.
     """
 
@@ -679,7 +664,7 @@ def parse_executive_summary(response_text: str) -> ExecutiveSummary:
 def normalize_public_language(text: str) -> str:
     """Replace a few common safety-language slips without dropping a useful answer.
 
-    Gemma occasionally writes phrases such as ``bukan diagnosis`` despite the
+    A model can occasionally write phrases such as ``bukan diagnosis`` despite the
     system instruction. Those phrases are medically cautious, but the public
     NAYANA vocabulary intentionally uses ``penetapan kondisi medis`` instead.
     Normalising only these known forms keeps that copy rule while avoiding a
@@ -734,38 +719,21 @@ def build_summary_context(screening: ScreeningResult) -> dict[str, object]:
 
 
 def generate_executive_summary(screening: ScreeningResult) -> ExecutiveSummary:
-    api_key = os.getenv("GEMINI_API_KEY")
-    if not api_key:
-        raise HTTPException(status_code=503, detail="Ringkasan otomatis belum diaktifkan.")
-
-    from google import genai
-    from google.genai import types
-
-    model_name = os.getenv("GEMINI_MODEL", DEFAULT_GEMINI_MODEL)
     prompt = build_summary_context(screening)
 
     try:
-        client = genai.Client(api_key=api_key)
-        response = client.models.generate_content(
-            model=model_name,
-            contents=json.dumps(prompt, ensure_ascii=False),
-            config=types.GenerateContentConfig(
-                temperature=0.3,
-                response_mime_type="application/json",
-                thinking_config=types.ThinkingConfig(
-                    thinking_level="HIGH",
-                    include_thoughts=False,
-                ),
-                system_instruction=SUMMARY_SYSTEM_INSTRUCTION,
-            ),
+        response_text = netra_json_response(
+            SUMMARY_SYSTEM_INSTRUCTION,
+            prompt,
+            EXECUTIVE_SUMMARY_SCHEMA,
+            max_output_tokens=1_500,
         )
-        return parse_executive_summary(response_text_without_thoughts(response))
+        return parse_executive_summary(response_text)
     except HTTPException:
         raise
     except Exception as error:
         logger.exception(
-            "Executive summary generation failed (model=%s, error_type=%s)",
-            model_name,
+            "Executive summary generation failed (provider=netra, error_type=%s)",
             type(error).__name__,
         )
         raise HTTPException(
@@ -784,7 +752,7 @@ def suggestion_cache_key(screening: ScreeningResult) -> str:
         {
             "version": PROMPT_VERSION if rag_enabled() else "suggestions-v1",
             "corpus_version": os.getenv("NAYANA_RAG_VERSION", ""),
-            "llm": os.getenv("GEMINI_MODEL", DEFAULT_GEMINI_MODEL),
+            "llm": os.getenv("NAYANA_RAG_NETRA_MODEL", "deepseek/deepseek-v4-flash-0731"),
             "model_version": screening.model_version,
             "top": screening.top_prediction.key,
             "scores": [(item.key, round(item.score, 3)) for item in screening.predictions],
@@ -826,14 +794,6 @@ def generate_suggested_questions(payload: SuggestedQuestionRequest) -> Suggested
     if cached and now - cached[0] < SUGGESTION_CACHE_TTL_SECONDS:
         return cached[1]
 
-    api_key = os.getenv("GEMINI_API_KEY")
-    if not api_key:
-        raise HTTPException(status_code=503, detail="Pertanyaan lanjutan belum diaktifkan.")
-
-    from google import genai
-    from google.genai import types
-
-    model_name = os.getenv("GEMINI_MODEL", DEFAULT_GEMINI_MODEL)
     prompt = {
         **build_summary_context(payload.screening),
         "already_covered": [
@@ -843,18 +803,13 @@ def generate_suggested_questions(payload: SuggestedQuestionRequest) -> Suggested
         ],
     }
     try:
-        client = genai.Client(api_key=api_key)
-        response = client.models.generate_content(
-            model=model_name,
-            contents=json.dumps(prompt, ensure_ascii=False),
-            config=types.GenerateContentConfig(
-                temperature=0.45,
-                response_mime_type="application/json",
-                thinking_config=types.ThinkingConfig(thinking_level="HIGH", include_thoughts=False),
-                system_instruction=SUGGESTED_QUESTIONS_SYSTEM_INSTRUCTION,
-            ),
+        response_text = netra_json_response(
+            SUGGESTED_QUESTIONS_SYSTEM_INSTRUCTION,
+            prompt,
+            SUGGESTED_QUESTIONS_SCHEMA,
+            max_output_tokens=2_048,
         )
-        result = parse_suggested_questions(response_text_without_thoughts(response))
+        result = parse_suggested_questions(response_text)
         if len(_suggestion_cache) >= SUGGESTION_CACHE_MAX_ITEMS:
             oldest_key = min(_suggestion_cache, key=lambda item: _suggestion_cache[item][0])
             _suggestion_cache.pop(oldest_key, None)
@@ -863,7 +818,7 @@ def generate_suggested_questions(payload: SuggestedQuestionRequest) -> Suggested
     except HTTPException:
         raise
     except Exception as error:
-        logger.exception("Suggested question generation failed (model=%s, error_type=%s)", model_name, type(error).__name__)
+        logger.exception("Suggested question generation failed (provider=netra, error_type=%s)", type(error).__name__)
         raise HTTPException(status_code=503, detail="Pertanyaan lanjutan belum dapat disiapkan. Anda tetap dapat menulis pertanyaan sendiri.") from error
 
 
@@ -889,14 +844,6 @@ def generate_screening_chat(payload: ScreeningChatRequest) -> ScreeningChatRespo
             # and a retrieval failure indistinguishable during incident review.
             logger.exception("NEI chat unavailable (error_type=%s)", type(error).__name__)
             raise HTTPException(status_code=503, detail="Jawaban bersumber belum dapat disiapkan. Silakan coba lagi; pertanyaan Anda tidak perlu dihapus.") from None
-    api_key = os.getenv("GEMINI_API_KEY")
-    if not api_key:
-        raise HTTPException(status_code=503, detail="Percakapan hasil belum diaktifkan.")
-
-    from google import genai
-    from google.genai import types
-
-    model_name = os.getenv("GEMINI_MODEL", DEFAULT_GEMINI_MODEL)
     context = build_summary_context(payload.screening)
     request_payload = {
         **context,
@@ -905,24 +852,20 @@ def generate_screening_chat(payload: ScreeningChatRequest) -> ScreeningChatRespo
     }
 
     try:
-        client = genai.Client(api_key=api_key)
-        response = client.models.generate_content(
-            model=model_name,
-            contents=json.dumps(request_payload, ensure_ascii=False),
-            config=types.GenerateContentConfig(
-                temperature=0.35,
-                thinking_config=types.ThinkingConfig(thinking_level="HIGH", include_thoughts=False),
-                system_instruction=CHAT_SYSTEM_INSTRUCTION,
-            ),
+        response_text = netra_json_response(
+            CHAT_SYSTEM_INSTRUCTION,
+            request_payload,
+            SCREENING_CHAT_SCHEMA,
+            max_output_tokens=1_500,
         )
-        answer = response_text_without_thoughts(response).strip()
+        answer = json.loads(response_text)["answer"].strip()
         if not answer:
             raise ValueError("Jawaban kosong dari model.")
         return ScreeningChatResponse(answer=normalize_public_language(answer))
     except HTTPException:
         raise
     except Exception as error:
-        logger.exception("Screening chat failed (model=%s, error_type=%s)", model_name, type(error).__name__)
+        logger.exception("Screening chat failed (provider=netra, error_type=%s)", type(error).__name__)
         raise HTTPException(status_code=503, detail="Jawaban belum dapat dibuat. Silakan coba lagi.") from error
 
 
@@ -1088,8 +1031,9 @@ def health_check():
         "model_version": MODEL_VERSION,
         "demo_case_count": len(DEMO_CASES),
         "executive_summary": {
-            "configured": bool(os.getenv("GEMINI_API_KEY")),
-            "model": os.getenv("GEMINI_MODEL", DEFAULT_GEMINI_MODEL),
+            "configured": provider_status.get("provider_key_configured", False),
+            "provider": "netra",
+            "model": provider_status.get("provider_model"),
         },
         "rag": {
             "configured": rag_enabled(),

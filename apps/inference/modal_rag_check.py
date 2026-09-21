@@ -1,4 +1,4 @@
-"""Bounded live Gemma grounding checks on synthetic questions; no production writes.
+"""Bounded live Netra grounding checks on synthetic questions; no production writes.
 
 modal run modal_rag_check.py --version nei-<tested-version>
 """
@@ -12,7 +12,6 @@ check_image = (modal.Image.debian_slim(python_version="3.11")
     .pip_install("torch==2.8.0+cpu", index_url="https://download.pytorch.org/whl/cpu")
     .pip_install_from_requirements(LOCAL / "requirements.rag.txt")
     .pip_install("pydantic>=2,<3")
-    .pip_install("google-genai")
     .add_local_dir(LOCAL / "rag", "/root/rag"))
 
 
@@ -25,33 +24,22 @@ def check(version: str, suggestions_only: bool = False, seed_all: bool = False, 
     from concurrent.futures import ThreadPoolExecutor
     os.environ["NAYANA_RAG_ARTIFACTS"] = "/rag-data"
     os.environ["NAYANA_RAG_VERSION"] = version
-    from google import genai
-    from google.genai import types
-    from rag.citations import as_genai_schema
+    from rag.providers import netra_completion, selected_rag_provider
     from rag.service import answer_question, starter_questions
     from rag.common import write_json
 
     def complete(instruction, payload, response_schema=None):
-        from rag.stream import collect_json_stream
-        client = genai.Client(api_key=os.environ["GEMINI_API_KEY"])
-        try:
-            response_stream = client.models.generate_content_stream(
-                model="gemma-4-31b-it", contents=payload,
-                config=types.GenerateContentConfig(
-                    thinking_config=types.ThinkingConfig(thinking_level="MINIMAL", include_thoughts=False),
-                    # This is an offline, one-time seed. Match the production
-                    # RAG chat thinking level, use the same diagnostic 15K cap,
-                    # and give the provider a full five-minute request deadline.
-                    max_output_tokens=15000,
-                    http_options=types.HttpOptions(timeout=300000),
-                    response_mime_type="application/json",
-                    response_schema=as_genai_schema(response_schema, types) if response_schema is not None else None,
-                    system_instruction=instruction,
-                ),
-            )
-            return collect_json_stream(response_stream).text
-        finally:
-            client.close()
+        provider = selected_rag_provider()
+        if not provider.api_key:
+            raise RuntimeError("NETRA_API_KEY is not configured")
+        return netra_completion(
+            provider=provider,
+            instruction=instruction,
+            payload=payload,
+            timeout_ms=300000,
+            max_output_tokens=15000,
+            response_schema=response_schema,
+        ).text
 
     cases = [
         ("cataract", "Penyebab katarak paling sering apa?", "grounded"),

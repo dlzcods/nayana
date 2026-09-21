@@ -44,21 +44,13 @@ def test_retrieval_metadata_keeps_operational_counts_not_prompt_text():
     assert "rahasia" not in json.dumps(metadata)
 
 
-def test_rag_provider_switch_defaults_to_gemini_and_external_providers_are_explicit():
-    gemini = selected_rag_provider({"GEMINI_API_KEY": "test-key"})
-    openrouter = selected_rag_provider({
-        "NAYANA_RAG_PROVIDER": "openrouter", "OPENROUTER_API_KEY": "router-key",
-    })
-    netra = selected_rag_provider({
-        "NAYANA_RAG_PROVIDER": "netra", "NETRA_API_KEY": "netra-key",
-    })
-    assert (gemini.name, gemini.model, gemini.api_key) == ("gemini", "gemma-4-31b-it", "test-key")
-    assert (openrouter.name, openrouter.model, openrouter.api_key) == (
-        "openrouter", "google/gemma-4-26b-a4b-it", "router-key",
-    )
+def test_rag_provider_defaults_to_netra_and_rejects_legacy_routes():
+    netra = selected_rag_provider({"NETRA_API_KEY": "netra-key"})
     assert (netra.name, netra.model, netra.api_key) == (
         "netra", "deepseek/deepseek-v4-flash-0731", "netra-key",
     )
+    with pytest.raises(ValueError, match="must be 'netra'"):
+        selected_rag_provider({"NAYANA_RAG_PROVIDER": "gemini"})
 
 
 def test_netra_stream_forwards_only_content_deltas_and_keeps_reasoning_private():
@@ -90,7 +82,7 @@ def test_netra_stream_forwards_only_content_deltas_and_keeps_reasoning_private()
     assert request.call_args.args[0].headers["X-netra-agent"] == "nayana-screening-chat"
 
 
-def test_netra_legacy_completion_keeps_the_json_contract_and_never_uses_gemini():
+def test_netra_completion_keeps_the_json_contract_and_excludes_reasoning():
     class FakeResponse:
         headers = {"X-Request-Id": "netra-request"}
 

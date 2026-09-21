@@ -61,7 +61,9 @@ VITE_SUPABASE_URL="https://PROJECT-REF.supabase.co"
 VITE_SUPABASE_PUBLISHABLE_KEY="sb_publishable_..."
 ```
 
-Do not put Gemini, OpenRouter, or Firecrawl API keys in frontend files. Store them only in backend environment configuration or a Modal Secret.
+Do not put `NETRA_API_KEY` or `FIRECRAWL_API_KEY` in frontend files. Store them only in backend environment configuration or a Modal Secret. `VITE_SUPABASE_PUBLISHABLE_KEY` is intentionally browser-visible; account-data protection depends on Supabase Row Level Security (RLS), not on keeping that key secret.
+
+NAYANA summaries and Chat NAYANA run through Netra Runtime with `deepseek/deepseek-v4-flash-0731`. Add `NETRA_API_KEY` to the `nayana` Modal Secret, then set `NAYANA_RAG_PROVIDER=netra` and `NAYANA_RAG_NETRA_MODEL=deepseek/deepseek-v4-flash-0731`. Modal continues to run screening, RAG retrieval, citation verification, and PDF generation. The Netra request contains only the user question, result context, and NEI evidence; it never contains a fundus photo.
 
 ## Deploy backend services
 
@@ -96,6 +98,10 @@ NAYANA is an early screening companion, not a diagnostic tool. For symptoms, vis
 
 ## Model source
 
-The model, sample photos, notebooks, and license originate from the Hugging Face Space [`dielz/eye-disease-classification`](https://huggingface.co/spaces/dielz/eye-disease-classification). The source license is in `third_party/eye-disease-classification/LICENSE.txt`.
+The model, sample photos, notebooks, and license originate from the Hugging Face Space [`dielz/eye-disease-classification`](https://huggingface.co/spaces/dielz/eye-disease-classification). The source license is in `third_party/eye-disease-classification/LICENSE.txt`. See [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md) for boundaries around NAYANA, third-party assets, and educational sources.
+
+## Repository license
+
+This repository is source-available, not open source. NAYANA code may be reviewed and run in a controlled environment for learning, research review, demonstration, or evaluation, but may not be reused, republished, deployed, or used for derivative work without written permission. See [LICENSE](LICENSE).
 
 Read the [Indonesian version](README.md).
