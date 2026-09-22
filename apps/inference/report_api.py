@@ -11,6 +11,7 @@ from io import BytesIO
 import os
 import json
 from pathlib import Path
+import warnings
 from xml.sax.saxutils import escape
 
 from fastapi import FastAPI, File, Form, HTTPException, UploadFile
@@ -24,17 +25,20 @@ from starlette.concurrency import run_in_threadpool
 BASE_DIR = Path(__file__).resolve().parent
 MAX_PDF_IMAGE_BYTES = 10 * 1024 * 1024
 MIN_IMAGE_DIMENSION = 224
+MAX_IMAGE_DIMENSION = 4096
+MAX_IMAGE_PIXELS = MAX_IMAGE_DIMENSION * MAX_IMAGE_DIMENSION
+ALLOWED_IMAGE_FORMATS = frozenset({"JPEG", "PNG", "WEBP"})
 
 
 class Prediction(BaseModel):
-    key: str = Field(min_length=1, max_length=80)
+    key: str = Field(pattern=r"^[a-z_]{2,64}$")
     label: str = Field(min_length=1, max_length=120)
     score: float = Field(ge=0, le=1)
 
 
 class ScreeningResult(BaseModel):
-    screening_id: str = Field(min_length=1, max_length=160)
-    source: str = Field(min_length=1, max_length=20)
+    screening_id: str = Field(pattern=r"^[A-Za-z0-9_-]{1,160}$")
+    source: str = Field(pattern=r"^(demo|upload)$")
     model_version: str = Field(min_length=1, max_length=160)
     top_prediction: Prediction
     predictions: list[Prediction] = Field(min_length=1, max_length=12)
@@ -78,6 +82,15 @@ app.add_middleware(
 )
 
 
+@app.middleware("http")
+async def harden_api_responses(request, call_next):
+    response = await call_next(request)
+    response.headers.setdefault("X-Content-Type-Options", "nosniff")
+    if request.method == "POST":
+        response.headers["Cache-Control"] = "no-store"
+    return response
+
+
 def decode_pdf_attachment(image_bytes: bytes | None) -> tuple[BytesIO, int, int] | None:
     """Validate a one-request attachment without persisting it."""
 
@@ -86,16 +99,20 @@ def decode_pdf_attachment(image_bytes: bytes | None) -> tuple[BytesIO, int, int]
     if len(image_bytes) > MAX_PDF_IMAGE_BYTES:
         raise HTTPException(status_code=413, detail="Lampiran foto untuk PDF melebihi batas 10 MB.")
     try:
-        image_buffer = BytesIO(image_bytes)
-        with Image.open(image_buffer) as image:
-            image.load()
-            width, height = image.size
-            if min(width, height) < MIN_IMAGE_DIMENSION:
-                raise ValueError("Foto terlalu kecil.")
-    except (OSError, ValueError) as error:
+        with warnings.catch_warnings():
+            warnings.simplefilter("error", Image.DecompressionBombWarning)
+            with Image.open(BytesIO(image_bytes)) as image:
+                if image.format not in ALLOWED_IMAGE_FORMATS:
+                    raise ValueError("Format gambar tidak didukung.")
+                if getattr(image, "n_frames", 1) != 1:
+                    raise ValueError("Gambar animasi tidak didukung.")
+                width, height = image.size
+                if width * height > MAX_IMAGE_PIXELS or min(width, height) < MIN_IMAGE_DIMENSION:
+                    raise ValueError("Dimensi gambar tidak valid.")
+                image.load()
+    except (Image.DecompressionBombError, Image.DecompressionBombWarning, OSError, ValueError) as error:
         raise HTTPException(status_code=400, detail="Lampiran foto untuk PDF bukan gambar yang valid.") from error
-    image_buffer.seek(0)
-    return image_buffer, width, height
+    return BytesIO(image_bytes), width, height
 
 
 def build_screening_pdf(

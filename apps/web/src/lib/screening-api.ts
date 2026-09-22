@@ -302,7 +302,10 @@ export async function streamScreeningQuestion(options: {
   try {
     response = await fetch(apiUrl('/v1/screenings/chat/stream'), {
       method: 'POST',
-      headers: { Accept: 'text/event-stream', 'Content-Type': 'application/json' },
+      headers: {
+        Accept: 'text/event-stream',
+        'Content-Type': 'application/json',
+      },
       body: JSON.stringify(options),
     })
   } catch {

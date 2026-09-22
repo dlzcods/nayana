@@ -21,7 +21,12 @@ image = (
 app = modal.App("nayana-report")
 
 
-@app.function(image=image, timeout=30, scaledown_window=120)
+@app.function(
+    image=image,
+    timeout=30,
+    scaledown_window=120,
+    max_containers=1,
+)
 @modal.asgi_app()
 def report_api():
     import sys

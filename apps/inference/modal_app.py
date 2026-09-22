@@ -46,6 +46,7 @@ rag_volume = modal.Volume.from_name("nayana-nei-rag", create_if_missing=False)
     timeout=300,
     scaledown_window=900,
     min_containers=0,
+    max_containers=1,
     memory=4096,
 )
 @modal.concurrent(max_inputs=8)

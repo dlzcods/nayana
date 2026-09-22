@@ -19,10 +19,12 @@ import os
 import re
 import time
 import uuid
+import warnings
 from functools import lru_cache
 from io import BytesIO
 from pathlib import Path
 from typing import Literal
+from xml.sax.saxutils import escape
 
 import numpy as np
 import tensorflow as tf
@@ -42,6 +44,8 @@ MODEL_VERSION = "eye-disease-classification-savedmodel"
 MAX_UPLOAD_BYTES = 10 * 1024 * 1024
 MIN_IMAGE_DIMENSION = 224
 MAX_IMAGE_DIMENSION = 4096
+MAX_IMAGE_PIXELS = MAX_IMAGE_DIMENSION * MAX_IMAGE_DIMENSION
+ALLOWED_IMAGE_FORMATS = frozenset({"JPEG", "PNG", "WEBP"})
 # Modal permits this endpoint to execute for 300 seconds. Keep the provider
 # deadline aligned so an otherwise active generation is not cut off at 120s.
 # This is operational configuration, not a secret or Modal environment variable.
@@ -108,33 +112,46 @@ class DemoCase(BaseModel):
 
 
 class DemoScreeningRequest(BaseModel):
-    case_id: str = Field(description="ID case dari GET /v1/demo-cases")
+    case_id: str = Field(pattern=r"^[a-z0-9-]{3,64}$", description="ID case dari GET /v1/demo-cases")
 
 
 class Prediction(BaseModel):
-    key: str
-    label: str
+    key: str = Field(pattern=r"^[a-z_]{2,64}$")
+    label: str = Field(min_length=1, max_length=120)
     score: float = Field(ge=0, le=1)
 
 
 class ScreeningResult(BaseModel):
-    screening_id: str
+    screening_id: str = Field(pattern=r"^[A-Za-z0-9_-]{1,160}$")
     source: Literal["demo", "upload"]
-    case_id: str | None = None
-    model_version: str
+    case_id: str | None = Field(default=None, pattern=r"^[a-z0-9-]{3,64}$")
+    model_version: str = Field(min_length=1, max_length=160)
     top_prediction: Prediction
-    predictions: list[Prediction]
-    disclaimer: str
+    predictions: list[Prediction] = Field(min_length=len(LABELS), max_length=len(LABELS))
+    disclaimer: str = Field(min_length=1, max_length=1000)
+
+    @model_validator(mode="after")
+    def validate_model_result_shape(self):
+        expected_labels = dict(LABELS)
+        by_key = {prediction.key: prediction for prediction in self.predictions}
+        if set(by_key) != set(expected_labels) or len(by_key) != len(self.predictions):
+            raise ValueError("Kategori hasil skrining tidak valid.")
+        if any(by_key[key].label != label for key, label in expected_labels.items()):
+            raise ValueError("Label hasil skrining tidak valid.")
+        matching_top = by_key.get(self.top_prediction.key)
+        if matching_top is None or matching_top.label != self.top_prediction.label or matching_top.score != self.top_prediction.score:
+            raise ValueError("Prediksi utama harus berasal dari kategori hasil skrining.")
+        return self
 
 
 class ExecutiveSummary(BaseModel):
-    title: str
-    overview: str
-    general_information: str
-    common_factors: str
-    what_to_notice: str
-    next_step: str
-    disclaimer: str
+    title: str = Field(min_length=1, max_length=180)
+    overview: str = Field(min_length=1, max_length=2400)
+    general_information: str = Field(min_length=1, max_length=3200)
+    common_factors: str = Field(min_length=1, max_length=3200)
+    what_to_notice: str = Field(min_length=1, max_length=3200)
+    next_step: str = Field(min_length=1, max_length=2400)
+    disclaimer: str = Field(min_length=1, max_length=1600)
 
 
 class ExecutiveSummaryRequest(BaseModel):
@@ -274,6 +291,15 @@ app.add_middleware(
     allow_headers=["Content-Type"],
 )
 
+
+@app.middleware("http")
+async def harden_api_responses(request, call_next):
+    response = await call_next(request)
+    response.headers.setdefault("X-Content-Type-Options", "nosniff")
+    if request.method == "POST":
+        response.headers["Cache-Control"] = "no-store"
+    return response
+
 def case_image_path(case: dict[str, str]) -> Path:
     path = EXAMPLES_DIR / case["filename"]
     if not path.is_file():
@@ -329,6 +355,26 @@ def predict_bytes(image_bytes: bytes) -> list[Prediction]:
         return predict_image(image)
 
 
+def decode_safe_image(image_bytes: bytes, *, invalid_detail: str) -> Image.Image:
+    """Decode one supported still image after checking dimensions before pixel allocation."""
+
+    try:
+        with warnings.catch_warnings():
+            warnings.simplefilter("error", Image.DecompressionBombWarning)
+            with Image.open(BytesIO(image_bytes)) as opened_image:
+                if opened_image.format not in ALLOWED_IMAGE_FORMATS:
+                    raise ValueError("Format gambar tidak didukung.")
+                if getattr(opened_image, "n_frames", 1) != 1:
+                    raise ValueError("Gambar animasi tidak didukung.")
+                width, height = opened_image.size
+                if width * height > MAX_IMAGE_PIXELS:
+                    raise ValueError("Resolusi gambar terlalu besar.")
+                opened_image.load()
+                return opened_image.convert("RGB")
+    except (Image.DecompressionBombError, Image.DecompressionBombWarning, OSError, ValueError) as error:
+        raise HTTPException(status_code=400, detail=invalid_detail) from error
+
+
 def normalize_upload(raw_image: bytes) -> bytes:
     """Decode and rewrite an upload without metadata, entirely in memory."""
 
@@ -337,11 +383,7 @@ def normalize_upload(raw_image: bytes) -> bytes:
     if len(raw_image) > MAX_UPLOAD_BYTES:
         raise HTTPException(status_code=413, detail="Ukuran foto melebihi batas 10 MB.")
 
-    try:
-        with Image.open(BytesIO(raw_image)) as opened_image:
-            image = opened_image.convert("RGB")
-    except (OSError, ValueError) as error:
-        raise HTTPException(status_code=400, detail="File gambar tidak dapat dibaca.") from error
+    image = decode_safe_image(raw_image, invalid_detail="File gambar tidak dapat dibaca.")
 
     if min(image.size) < MIN_IMAGE_DIMENSION:
         raise HTTPException(status_code=400, detail="Foto terlalu kecil untuk diperiksa.")
@@ -880,15 +922,11 @@ def decode_pdf_attachment(image_base64: str | None) -> tuple[BytesIO, int, int] 
         raise HTTPException(status_code=400, detail="Lampiran foto untuk PDF tidak dapat dibaca.") from error
     if not image_bytes or len(image_bytes) > MAX_PDF_IMAGE_BYTES:
         raise HTTPException(status_code=413, detail="Lampiran foto untuk PDF melebihi batas 10 MB.")
-    try:
-        image_buffer = BytesIO(image_bytes)
-        with Image.open(image_buffer) as image:
-            image.load()
-            width, height = image.size
-            if min(width, height) < MIN_IMAGE_DIMENSION:
-                raise ValueError("Foto terlalu kecil.")
-    except (OSError, ValueError) as error:
-        raise HTTPException(status_code=400, detail="Lampiran foto untuk PDF bukan gambar yang valid.") from error
+    image = decode_safe_image(image_bytes, invalid_detail="Lampiran foto untuk PDF bukan gambar yang valid.")
+    width, height = image.size
+    if min(width, height) < MIN_IMAGE_DIMENSION:
+        raise HTTPException(status_code=400, detail="Lampiran foto untuk PDF bukan gambar yang valid.")
+    image_buffer = BytesIO(image_bytes)
     image_buffer.seek(0)
     return image_buffer, width, height
 
@@ -924,7 +962,7 @@ def build_screening_pdf(payload: ScreeningPdfRequest) -> BytesIO:
         story.append(Paragraph("NAYANA", ParagraphStyle("brand", fontName="Helvetica-Bold", fontSize=22, textColor=ink)))
     story.extend([Spacer(1, 10 * mm), Paragraph("RINGKASAN SKRINING AWAL", ParagraphStyle("kicker", fontName="Helvetica-Bold", fontSize=8, leading=10, textColor=blue)), Spacer(1, 3 * mm)])
     story.append(Paragraph(
-        f"Pola paling mirip dengan {payload.screening.top_prediction.label.lower()}.",
+        f"Pola paling mirip dengan {escape(payload.screening.top_prediction.label.lower())}.",
         ParagraphStyle("title", fontName="Helvetica-Bold", fontSize=25, leading=29, textColor=ink),
     ))
     story.extend([Spacer(1, 5 * mm), Paragraph(
@@ -933,7 +971,7 @@ def build_screening_pdf(payload: ScreeningPdfRequest) -> BytesIO:
     ), Spacer(1, 8 * mm), HRFlowable(width="100%", color=HexColor("#D8D8D3"), thickness=.5), Spacer(1, 4 * mm)])
     rows = [[Paragraph("Kategori", ParagraphStyle("head", fontName="Helvetica-Bold", fontSize=9, textColor=ink)), Paragraph("Kemiripan pola", ParagraphStyle("head2", fontName="Helvetica-Bold", fontSize=9, textColor=ink))]]
     for prediction in payload.screening.predictions:
-        rows.append([prediction.label, f"{round(prediction.score * 100)}%"])
+        rows.append([escape(prediction.label), f"{round(prediction.score * 100)}%"])
     table = Table(rows, colWidths=[125 * mm, 45 * mm])
     table.setStyle(TableStyle([
         ("FONTNAME", (0, 1), (-1, -1), "Helvetica"), ("FONTSIZE", (0, 1), (-1, -1), 10),
@@ -948,9 +986,9 @@ def build_screening_pdf(payload: ScreeningPdfRequest) -> BytesIO:
         story.append(Paragraph("Ringkasan edukatif", heading_style))
         for label, text in (("Gambaran awal", payload.summary.overview), ("Tentang pola ini", payload.summary.general_information), ("Faktor umum", payload.summary.common_factors), ("Langkah berikutnya", payload.summary.next_step)):
             story.append(Paragraph(label, ParagraphStyle("label-" + label, fontName="Helvetica-Bold", fontSize=9, leading=13, textColor=blue, spaceBefore=5)))
-            story.append(Paragraph(text, body_style))
+            story.append(Paragraph(escape(text), body_style))
         story.append(Spacer(1, 6 * mm))
-        story.append(Paragraph(payload.summary.disclaimer, ParagraphStyle("disclaimer", fontName="Helvetica", fontSize=8.5, leading=12, textColor=muted)))
+        story.append(Paragraph(escape(payload.summary.disclaimer), ParagraphStyle("disclaimer", fontName="Helvetica", fontSize=8.5, leading=12, textColor=muted)))
     attachment = decode_pdf_attachment(payload.fundus_image_base64)
     if attachment:
         image_buffer, width, height = attachment
@@ -996,7 +1034,8 @@ def build_demo_result(case_id: str, screening_id: str) -> ScreeningResult:
     try:
         predictions = predict_path(case_image_path(case))
     except RuntimeError as error:
-        raise HTTPException(status_code=503, detail=str(error)) from error
+        logger.exception("Demo screening inference unavailable (error_type=%s)", type(error).__name__)
+        raise HTTPException(status_code=503, detail="Layanan skrining sedang belum siap. Silakan coba lagi.") from error
 
     return ScreeningResult(
         screening_id=screening_id,
@@ -1014,36 +1053,8 @@ def build_demo_result(case_id: str, screening_id: str) -> ScreeningResult:
 
 @app.get("/v1/health")
 def health_check():
-    from rag.providers import selected_rag_provider
-    rag_version = os.getenv("NAYANA_RAG_VERSION", "").strip()
-    evidence_reference_mode = "server_attribution" if rag_version else None
-    try:
-        rag_provider = selected_rag_provider()
-        provider_status = {
-            "provider": rag_provider.name,
-            "provider_model": rag_provider.model,
-            "provider_key_configured": bool(rag_provider.api_key),
-        }
-    except ValueError as error:
-        provider_status = {"provider": "invalid", "provider_error": str(error), "provider_key_configured": False}
     return {
         "status": "ready" if MODEL_PATH.is_dir() else "needs_model",
-        "model_version": MODEL_VERSION,
-        "demo_case_count": len(DEMO_CASES),
-        "executive_summary": {
-            "configured": provider_status.get("provider_key_configured", False),
-            "provider": "netra",
-            "model": provider_status.get("provider_model"),
-        },
-        "rag": {
-            "configured": rag_enabled(),
-            "version": rag_version or None,
-            "sources": 5 if rag_enabled() else 0,
-            "citation_mode": "sentence",
-            "evidence_reference_mode": evidence_reference_mode,
-            "ready": bool(rag_version),
-            **provider_status,
-        },
     }
 
 
@@ -1089,7 +1100,8 @@ async def screen_uploaded_fundus(
     try:
         predictions = await run_in_threadpool(predict_bytes, normalized_image)
     except RuntimeError as error:
-        raise HTTPException(status_code=503, detail=str(error)) from error
+        logger.exception("Screening inference unavailable (error_type=%s)", type(error).__name__)
+        raise HTTPException(status_code=503, detail="Layanan skrining sedang belum siap. Silakan coba lagi.") from error
 
     return ScreeningResult(
         screening_id=f"upload_{uuid.uuid4().hex}",
