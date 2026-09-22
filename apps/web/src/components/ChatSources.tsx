@@ -197,8 +197,8 @@ export function ChatSources({ text, citations = [], renderText, onCitationOpen }
       <button type="button" className="chat-sources__toggle" aria-expanded={sourcesExpanded} aria-controls={sourceListId}
         onClick={() => setSourcesExpanded((expanded) => !expanded)}>
         <span className="chat-sources__toggle-copy">
-          <span className="chat-sources__toggle-kicker">Bukti untuk jawaban ini</span>
-          <span className="chat-sources__toggle-title">{articles.length} sumber National Eye Institute</span>
+          <span className="chat-sources__toggle-kicker">Sumber jawaban</span>
+          <span className="chat-sources__toggle-title">{articles.length} sumber dari National Eye Institute</span>
         </span>
         <span className="chat-sources__chevron" aria-hidden="true">⌄</span>
       </button>

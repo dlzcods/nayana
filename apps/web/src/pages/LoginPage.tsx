@@ -74,8 +74,8 @@ export function LoginPage() {
             </div>
           ) : !isSupabaseConfigured ? (
             <>
-              <h2 id="auth-panel-title">Login sedang disiapkan.</h2>
-              <p>Tambahkan URL proyek dan publishable key Supabase untuk mengaktifkan login Google.</p>
+              <h2 id="auth-panel-title">Login belum tersedia saat ini.</h2>
+              <p>Anda tetap dapat melanjutkan skrining tanpa akun.</p>
             </>
           ) : session ? (
             <>
@@ -85,7 +85,7 @@ export function LoginPage() {
             </>
           ) : (
             <>
-              <h2 id="auth-panel-title">Simpan hasil dengan akun Google.</h2>
+              <h2 id="auth-panel-title">Simpan hasil di akun Google.</h2>
               <p>Login hanya diperlukan bila Anda ingin menyimpan hasil skrining. Anda tetap dapat menggunakan NAYANA tanpa akun.</p>
               <button className="app-google-action" disabled={pending} onClick={beginGoogleLogin} type="button">{pending ? 'Mengarahkan ke Google…' : 'Lanjut dengan Google'}</button>
             </>

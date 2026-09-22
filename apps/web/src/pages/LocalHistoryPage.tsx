@@ -32,9 +32,9 @@ export function LocalHistoryPage() {
         <Link className="app-local-history__back" to="/screening"><BackArrowIcon /> Kembali ke skrining</Link>
 
         <section className="app-local-history__intro">
-          <p className="app-kicker">Riwayat lokal</p>
-          <h1 id="local-history-title">Hasil tersimpan di perangkat.</h1>
-          <p>Data teks tersimpan di browser ini selama 3 hari. Foto fundus tidak disimpan.</p>
+          <p className="app-kicker">Hasil di perangkat ini</p>
+          <h1 id="local-history-title">Hasil tersimpan di perangkat ini.</h1>
+          <p>Data teks tersimpan di perangkat ini selama 3 hari. Foto fundus tidak disimpan.</p>
         </section>
 
         {history.length === 0 ? (
@@ -83,7 +83,7 @@ export function LocalHistoryPage() {
 
         <section className="app-local-history__account-note">
           <p>Ingin membuka hasil dari perangkat lain atau menyimpannya lebih lama?</p>
-          <Link className="app-secondary-action" to="/login">Masuk untuk menyimpan permanen</Link>
+          <Link className="app-secondary-action" to="/login">Masuk untuk menyimpan lebih lama</Link>
         </section>
       </main>
     </div>

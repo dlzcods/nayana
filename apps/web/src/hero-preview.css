@@ -391,6 +391,14 @@
   line-height: 1.02;
 }
 
+.optic-privacy__intro {
+  max-width: 440px;
+  margin: 24px 0 0;
+  color: #575a63;
+  font-size: 15px;
+  line-height: 1.6;
+}
+
 .optic-faq h2{font-size:clamp(46px,4.8vw,70px);line-height:1.02}
 
 .optic-privacy__body {
@@ -526,6 +534,12 @@
 
   .optic-privacy h2 {
     font-size: 36px;
+  }
+
+  .optic-privacy__intro {
+    max-width: 290px;
+    margin-top: 16px;
+    font-size: 13px;
   }
 
   .optic-faq h2{font-size:40px}

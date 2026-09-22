@@ -12,15 +12,15 @@ const conditions = [
   { number: '04', name: 'Kategori normal', copy: 'Foto paling mirip dengan kategori normal. Namun, sistem tidak memeriksa semua kondisi mata, sehingga pemeriksaan berkala tetap disarankan.' },
 ]
 const privacyPrinciples = [
-  { number: '01', title: 'Unggah tanpa identitas', copy: 'Gunakan foto retina tanpa nama atau nomor rekam medis.' },
-  { number: '02', title: 'Analisis yang terarah', copy: 'Sistem membaca pola visual yang dibutuhkan untuk hasil awal.' },
-  { number: '03', title: 'Keputusan tetap pada Anda', copy: 'Bawa hasilnya kepada dokter spesialis mata (Sp.M.).' },
+  { number: '01', title: 'Jangan sertakan identitas', copy: 'Foto fundus sebaiknya tidak memuat nama atau nomor rekam medis.' },
+  { number: '02', title: 'Dipakai untuk skrining awal', copy: 'Sistem membaca pola pada foto untuk menampilkan gambaran awal.' },
+  { number: '03', title: 'Anda memilih penyimpanannya', copy: 'Tanpa akun, ringkasan teks tersimpan di perangkat selama 3 hari. Dengan akun, hasil dapat disimpan selama masa yang dipilih.' },
 ]
 const faqs = [
-  { question: 'Apakah hasil ini merupakan diagnosis medis?', answer: 'Tidak. Hasil ini adalah gambaran awal, bukan diagnosis medis.' },
-  { question: 'Foto seperti apa yang sebaiknya diunggah?', answer: 'Gunakan foto retina yang terang, fokus, dan menampilkan area retina dengan jelas tanpa nama atau nomor rekam medis.' },
-  { question: 'Apa arti persentase pada hasil?', answer: 'Persentase menunjukkan tingkat kemiripan pola dengan kategori yang dipelajari sistem, bukan tingkat keparahan kondisi.' },
-  { question: 'Kapan saya perlu menemui dokter spesialis mata?', answer: 'Bawa hasil awal ini kepada dokter spesialis mata (Sp.M.) jika Anda memiliki keluhan penglihatan atau membutuhkan pemeriksaan lebih menyeluruh.' },
+  { question: 'Apakah ini diagnosis?', answer: 'Belum. Ini adalah skrining awal yang menunjukkan kemiripan pola, bukan penetapan kondisi medis.' },
+  { question: 'Foto apa yang bisa dipakai?', answer: 'Pilih foto fundus yang terang, fokus, dan menampilkan area retina dengan jelas tanpa nama atau nomor rekam medis.' },
+  { question: 'Apa arti angka persentasenya?', answer: 'Angka ini menunjukkan kemiripan pola dengan kategori yang dipelajari sistem, bukan tingkat keparahan kondisi.' },
+  { question: 'Kapan perlu ke dokter mata?', answer: 'Jika Anda memiliki keluhan penglihatan atau ingin memastikan hasil, bawa hasil ini ke dokter spesialis mata (Sp.M) untuk pemeriksaan langsung.' },
 ]
 
 export function LandingPage() {
@@ -38,7 +38,7 @@ export function LandingPage() {
             <p className="optic-overline">Alat bantu cek awal kesehatan mata</p>
             <h1>Kenali Kondisi Mata <span className="optic-hero__underline">Lebih Awal.</span></h1>
             <p className="optic-hero__lead">Unggah foto retina untuk mendapatkan gambaran awal sebelum berkonsultasi dengan dokter spesialis mata (Sp.M).</p>
-            <div className="optic-actions"><a className="optic-primary" href={screeningUrl}>Cek sekarang</a><a className="optic-secondary" href="#cara-kerja">Pelajari cara kerja <span aria-hidden="true">↗</span></a></div>
+            <div className="optic-actions"><a className="optic-primary" href={screeningUrl}>Mulai skrining</a><a className="optic-secondary" href="#cara-kerja">Pelajari cara kerja <span aria-hidden="true">↗</span></a></div>
             {/*<p className="optic-medical-note">Hasil ini adalah panduan awal, bukan diagnosis resmi. Selalu konfirmasikan kondisi mata Anda ke dokter spesialis mata (Sp.M).</p>*/}
           </motion.div>
           <motion.figure className="optic-hero__image" initial={reduceMotion ? undefined : { opacity: 0, x: 28 }} animate={{ opacity: 1, x: 0 }} transition={{ duration: reduceMotion ? 0 : 0.75, delay: reduceMotion ? 0 : 0.12 }}>
@@ -57,8 +57,8 @@ export function LandingPage() {
             <figure className="optic-process__image"><img src="/assets/eye-original/diagnostic-eye-scan-wide.jpg" alt="Proses pengambilan citra mata menggunakan alat diagnostik" /><figcaption>Foto retina yang jernih membantu sistem membaca pola dengan lebih akurat.</figcaption></figure>
             <ol className="optic-steps">
               <li><span>01</span><div><h3>Unggah foto retina</h3><p>Gunakan foto retina (fundus) yang terang, fokus, dan menampilkan area retina dengan jelas.</p></div></li>
-              <li><span>02</span><div><h3>Analisis pola visual</h3><p>Sistem membaca pola pada foto Anda dan mencocokkannya dengan indikasi umum masalah mata.</p></div></li>
-              <li><span>03</span><div><h3>Pahami gambaran awal</h3><p>Lihat indikasi yang paling mendekati beserta tingkat kemiripan polanya.</p></div></li>
+              <li><span>02</span><div><h3>Analisis pola visual</h3><p>Sistem membandingkan pola foto dengan empat kategori model.</p></div></li>
+              <li><span>03</span><div><h3>Pahami gambaran awal</h3><p>Lihat kategori dengan pola paling mirip beserta persentasenya.</p></div></li>
               <li><span>04</span><div><h3>Konsultasi ke dokter</h3><p>Bawa hasil awal ini kepada dokter spesialis mata (Sp.M) untuk pemeriksaan menyeluruh.</p></div></li>
             </ol>
           </div>
@@ -82,7 +82,8 @@ export function LandingPage() {
         <section className="optic-privacy" id="privasi" aria-labelledby="privacy-title"><div className="optic-shell">
           <motion.div className="optic-privacy__head" {...reveal}>
             <p className="optic-index">06 &nbsp; Privasi &amp; keamanan</p>
-            <h2 id="privacy-title">Foto Anda.<br />Informasi seperlunya.</h2>
+            <h2 id="privacy-title">Bagaimana foto Anda diproses.</h2>
+            <p className="optic-privacy__intro">Foto diproses untuk skrining awal. Setelah itu, Anda memilih apakah hasil ingin disimpan.</p>
           </motion.div>
           <div className="optic-privacy__body">
             <motion.article className="optic-privacy__principle optic-privacy__principle--one" {...reveal}>
@@ -98,7 +99,7 @@ export function LandingPage() {
         </div></section>
 
         <section className="optic-faq optic-shell" id="faq" aria-labelledby="faq-title">
-          <div className="optic-faq__head"><p className="optic-index">07 &nbsp; Pertanyaan umum</p><h2 id="faq-title">Jawaban singkat sebelum Anda memulai.</h2></div>
+          <div className="optic-faq__head"><p className="optic-index">07 &nbsp; Pertanyaan umum</p><h2 id="faq-title">Sebelum mulai, ini yang perlu Anda tahu.</h2></div>
           <div className="optic-faq__list">
             {faqs.map((faq, index) => {
               const isOpen = openFaq === index
@@ -123,13 +124,13 @@ export function LandingPage() {
           </div>
         </section>
 
-        <section className="optic-closing optic-shell"><img src="/assets/eye-original/eye-closeup-shadow-portrait.jpg" alt="Close-up mata manusia dalam cahaya dan bayangan" /><div className="optic-closing__overlay"><p>Langkah awal untuk mengenali mata Anda</p><h2>Mulai dari gambaran awal. Lanjutkan dengan pemeriksaan yang tepat.</h2><a className="optic-primary optic-primary--light" href={screeningUrl}>Cek kondisi mata</a></div></section>
+        <section className="optic-closing optic-shell"><img src="/assets/eye-original/eye-closeup-shadow-portrait.jpg" alt="Close-up mata manusia dalam cahaya dan bayangan" /><div className="optic-closing__overlay"><p>Langkah awal untuk mengenali mata Anda</p><h2>Mulai dari gambaran awal. Lanjutkan dengan pemeriksaan yang tepat.</h2><a className="optic-primary optic-primary--light" href={screeningUrl}>Mulai skrining</a></div></section>
       </main>
 
       <footer className="optic-footer"><div className="optic-shell optic-footer__top">
-        <div><BrandMark /><p>Prototipe riset untuk panduan awal foto retina. Bukan perangkat medis dan bukan layanan darurat.</p></div>
-        <nav aria-label="Tautan proyek"><span>Proyek</span><a href="#cara-kerja">Cara kerja</a><a href="/model-evidence">Bukti model</a><a href={screeningUrl}>Demo analisis</a></nav>
-        <nav aria-label="Tautan kepercayaan"><span>Kepercayaan</span><a href="/terms">Ketentuan penggunaan</a></nav>
+        <div><BrandMark /><p>NAYANA adalah prototipe riset untuk membantu memahami hasil skrining awal dari foto retina. Bukan perangkat medis dan bukan layanan darurat.</p></div>
+        <nav aria-label="Tentang NAYANA"><span>Tentang NAYANA</span><a href="#cara-kerja">Cara kerja</a><a href="/model-evidence">Hasil uji</a><a href={screeningUrl}>Mulai skrining</a></nav>
+        <nav aria-label="Privasi dan ketentuan"><span>Privasi &amp; ketentuan</span><a href="/trust">Privasi &amp; data</a><a href="/terms">Ketentuan penggunaan</a></nav>
       </div><div className="optic-shell optic-footer__bottom"><span>© 2026 NAYANA</span><span>Pemeriksaan klinis tetap dilakukan oleh dokter spesialis mata (Sp.M).</span></div></footer>
     </div>
   )

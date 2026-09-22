@@ -214,7 +214,7 @@ export function HistoryChatPage() {
               <div className="app-history-chat__mobile-overview">
                 <div className="app-history-chat__mobile-heading">
                   <p className="app-kicker">Ruang percakapan</p>
-                  <h2>Tanyakan hasil ini dengan tenang.</h2>
+                  <h2>Apa yang ingin Anda pahami?</h2>
                   <p>Jawaban bersifat edukatif untuk membantu Anda memahami hasil skrining awal dan menyiapkan diskusi lanjutan.</p>
                 </div>
                 <div className="app-history-chat__result">
@@ -252,8 +252,8 @@ export function HistoryChatPage() {
                   <span aria-hidden="true">{overviewExpanded ? '⌃' : '⌄'}</span>
                 </button>
                 <div className="app-history-chat__thread-overview-copy">
-                  <h2 id="history-chat-title">Tanyakan hasil ini dengan tenang.</h2>
-                  <p>Pilih hal yang ingin Anda pahami dari hasil skrining dan siapkan bahan diskusi dengan dokter mata.</p>
+                  <h2 id="history-chat-title">Apa yang ingin Anda pahami?</h2>
+                  <p>Pilih pertanyaan di bawah atau tulis sendiri.</p>
                 </div>
               </header>
               <div

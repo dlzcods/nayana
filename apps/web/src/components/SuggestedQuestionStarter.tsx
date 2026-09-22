@@ -10,7 +10,7 @@ const fallbackPrompts: Record<string, string[]> = {
   cataract: [
     'Apa yang dimaksud dengan katarak?',
     'Gejala katarak apa yang perlu diperhatikan?',
-    'Bagaimana katarak biasanya ditangani?',
+    'Apa yang perlu saya diskusikan dengan dokter tentang katarak?',
   ],
   diabetic_retinopathy: [
     'Apa yang dimaksud dengan retinopati diabetik?',

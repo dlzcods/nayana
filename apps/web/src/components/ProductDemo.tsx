@@ -71,7 +71,7 @@ export function ProductDemo() {
           <p>Konsultasikan hasil ini dengan dokter spesialis mata (Sp.M.) untuk pemeriksaan lebih lanjut.</p>
         </div>
         <a className="optic-primary" href={screeningUrl}>
-          Cek mata Anda sekarang
+          Mulai skrining
         </a>
       </div>
 

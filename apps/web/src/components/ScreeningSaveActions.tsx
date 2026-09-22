@@ -32,7 +32,7 @@ export function ScreeningSaveActions({ result, summary, normalizedImage, initial
     if (initialDestination) {
       setSavedDestination(initialDestination)
       setState('saved')
-      setMessage(initialDestination.kind === 'account' ? 'Hasil skrining sudah tersimpan di akun Anda.' : 'Hasil skrining tersimpan di browser ini selama 3 hari.')
+      setMessage(initialDestination.kind === 'account' ? 'Hasil skrining sudah tersimpan di akun Anda.' : 'Hasil skrining tersimpan di perangkat ini selama 3 hari.')
       const active = getActiveScreening(result.screening_id)
       if (active && !active.savedDestination) saveActiveScreening({ ...active, savedDestination: initialDestination })
       return
@@ -71,7 +71,7 @@ export function ScreeningSaveActions({ result, summary, normalizedImage, initial
         onSaved?.(destination)
       } else {
         saveGuestHistory(result, summary)
-        setMessage('Hasil disimpan di browser ini selama 3 hari. Foto tidak disimpan.')
+        setMessage('Hasil disimpan di perangkat ini selama 3 hari. Foto tidak disimpan.')
         const destination = { kind: 'browser' as const }
         setSavedDestination(destination)
         const active = getActiveScreening(result.screening_id)
@@ -89,15 +89,15 @@ export function ScreeningSaveActions({ result, summary, normalizedImage, initial
     <section className="screening-save" aria-labelledby={`save-${result.screening_id}`}>
       <div>
         <p className="app-kicker">{purpose === 'unlock-chat' ? 'Simpan untuk berdiskusi' : 'Simpan untuk nanti'}</p>
-        <h2 id={`save-${result.screening_id}`}>{purpose === 'unlock-chat' ? 'Simpan hasil untuk membuka Tanya NAYANA.' : hasAccount ? 'Kembali ke hasil ini kapan saja.' : 'Simpan sementara di browser.'}</h2>
+        <h2 id={`save-${result.screening_id}`}>{purpose === 'unlock-chat' ? 'Simpan hasil untuk membuka Tanya NAYANA.' : hasAccount ? 'Simpan hasil di akun selama 30 atau 90 hari.' : 'Simpan di perangkat ini selama 3 hari.'}</h2>
         <p>
           {purpose === 'unlock-chat'
             ? hasAccount
               ? 'Hasil yang tersimpan dapat dibuka kembali bersama ruang percakapannya. Foto yang Anda unggah tersimpan privat di akun.'
               : 'Hasil dapat disimpan di browser selama 3 hari untuk membuka ruang percakapan. Foto tidak disimpan.'
             : hasAccount
-            ? 'Foto yang Anda unggah disimpan privat bersama hasil. Anda dapat menghapusnya kapan saja dari akun.'
-            : 'Tanpa akun, ringkasan hasil tersimpan lokal selama 3 hari. Foto tidak disimpan.'}
+            ? 'Foto yang Anda unggah disimpan privat bersama hasil selama masa yang Anda pilih. Anda dapat menghapusnya kapan saja.'
+            : 'Tanpa akun, ringkasan teks tersimpan di perangkat ini selama 3 hari. Foto tidak disimpan.'}
         </p>
       </div>
       {hasAccount ? (
@@ -117,9 +117,9 @@ export function ScreeningSaveActions({ result, summary, normalizedImage, initial
       ) : (
         <div className="screening-save__controls">
           <button className="app-primary-action" type="button" onClick={() => { void save() }} disabled={state === 'saving' || state === 'saved'}>
-            {state === 'saving' ? 'Menyimpan…' : state === 'saved' ? 'Tersimpan 3 hari' : 'Simpan 3 hari'}
+            {state === 'saving' ? 'Menyimpan…' : state === 'saved' ? 'Tersimpan di perangkat ini' : 'Simpan 3 hari'}
           </button>
-          {state === 'saved' && <Link className="app-text-action" to="/history-local">Lihat hasil tersimpan di perangkat</Link>}
+          {state === 'saved' && <Link className="app-text-action" to="/history-local">Lihat hasil di perangkat ini</Link>}
           <Link className="app-text-action" to="/login">Masuk untuk menyimpan di akun</Link>
         </div>
       )}

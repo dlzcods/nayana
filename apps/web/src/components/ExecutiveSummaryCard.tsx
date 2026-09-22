@@ -10,7 +10,7 @@ export function ExecutiveSummaryCard({ screening, summary, error }: ExecutiveSum
   return (
     <section className="executive-summary" aria-live="polite" aria-labelledby={`summary-${screening.screening_id}`}>
       <div className="executive-summary__head">
-        <p className="app-kicker">Nayana AI Summary</p>
+        <p className="app-kicker">Ringkasan NAYANA</p>
         <h2 id={`summary-${screening.screening_id}`}>Penjelasan umum {screening.top_prediction.label.toLowerCase()}.</h2>
       </div>
 

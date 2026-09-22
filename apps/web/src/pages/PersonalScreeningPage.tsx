@@ -391,7 +391,7 @@ export function PersonalScreeningPanel({ onProcessingChange }: PersonalScreening
                   disabled={usingDemo || isSubmitting}
                 />
                 <span>
-                  Saya memahami foto dibersihkan dari metadata lalu dikirim ke model untuk skrining awal.
+                  Saya memahami foto diproses setelah metadata dihapus untuk skrining awal.
                   Foto tidak disimpan pada tahap ini.
                 </span>
               </label>
@@ -420,9 +420,9 @@ export function PersonalScreeningPanel({ onProcessingChange }: PersonalScreening
         <aside className="app-boundary" aria-label="Privasi pemeriksaan foto">
           <span>Privasi singkat</span>
           <p>
-            Foto pribadi diproses untuk skrining awal pada sesi ini. Bila Anda memilih menyimpan hasil setelah
-            masuk akun, foto disimpan privat selama masa simpan yang Anda pilih. Contoh fundus berasal dari data uji
-            dataset sumber dan tidak memuat data pribadi pengguna.
+            Foto pribadi diproses untuk skrining awal. Foto tidak disimpan kecuali Anda memilih menyimpan hasil ke
+            akun. Saat itu, foto disimpan privat selama masa yang dipilih. Contoh fundus tidak memuat data pribadi
+            pengguna.
           </p>
           <a href="/trust">Lihat privasi & cara kerja data</a>
         </aside>

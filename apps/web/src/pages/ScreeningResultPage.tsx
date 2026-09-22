@@ -154,16 +154,16 @@ export function ScreeningResultPage() {
               </section>
 
               <section className="result-report__summary" aria-live="polite" aria-labelledby="summary-title">
-                <p className="app-kicker" id="summary-title">Nayana AI Summary</p>
+                <p className="app-kicker" id="summary-title">Ringkasan NAYANA</p>
                 <div className="result-report__summary-text">{summaryParagraphs.map((paragraph) => <p key={paragraph}>{paragraph}</p>)}</div>
                 <p className="result-report__disclaimer">Bukan diagnosis medis. Konfirmasi dengan dokter mata.</p>
               </section>
             </section>
 
             <section className="result-document__next">
-              <div><p className="app-kicker">Jika Anda ingin lanjut</p><h2>Siapkan bahan diskusi dengan dokter.</h2><p className="result-document__next-copy">Pilih pertanyaan yang ingin dibawa. PDF hanya dibuat saat Anda memintanya.</p></div>
+              <div><h2>Siapkan bahan diskusi dengan dokter.</h2><p className="result-document__next-copy">Pilih pertanyaan untuk dibawa ke dokter, atau siapkan PDF saat diperlukan.</p></div>
               <div className="result-document__next-actions">
-                <Link className="app-primary-action" to="/screening/results/$screeningId/discussion" params={{ screeningId }}>Buka Doctor Kit</Link>
+                <Link className="app-primary-action" to="/screening/results/$screeningId/discussion" params={{ screeningId }}>Siapkan pertanyaan</Link>
                 <ScreeningPdfAction
                   className="result-document__pdf-action"
                   screening={result}
@@ -185,7 +185,7 @@ export function ScreeningResultPage() {
             <h2 id="leave-result-title">Simpan hasil sebelum kembali?</h2>
             <p id="leave-result-description">Hasil ini masih berada di sesi skrining. Jika Anda keluar sekarang, hasil tersebut dapat hilang.</p>
             <div className="app-dialog__actions app-dialog__actions--leave">
-              <Link className="app-primary-action" to="/screening/results/$screeningId/discussion" params={{ screeningId }} onClick={() => setLeaveWarning(false)}>Buka Doctor Kit</Link>
+              <Link className="app-primary-action" to="/screening/results/$screeningId/discussion" params={{ screeningId }} onClick={() => setLeaveWarning(false)}>Siapkan pertanyaan</Link>
               <button className="app-secondary-action" type="button" onClick={() => window.location.assign(leavePath)}>Tetap keluar</button>
               <button className="app-text-action" type="button" onClick={() => setLeaveWarning(false)}>Batal</button>
             </div>

@@ -1,10 +1,10 @@
 import { useEffect, useState } from 'react'
 
 const finalizingSteps = [
-  'Mulai mempelajari pola',
-  'Merangkum kemiripan pola',
-  'Menyusun ringkasan edukatif',
-  'Menata langkah berikutnya',
+  'Membaca pola pada foto',
+  'Membandingkan dengan kategori model',
+  'Menyiapkan penjelasan umum',
+  'Menyiapkan langkah berikutnya',
 ]
 
 type ScreeningFinalizingProps = {

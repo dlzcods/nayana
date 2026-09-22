@@ -30,7 +30,7 @@ export function AccountPage() {
         <section className="app-account__intro" aria-labelledby="account-title">
           <p className="app-kicker">Akun NAYANA</p>
           <h1 id="account-title">Halo, {firstName(session.displayName)}.</h1>
-          <p>Gunakan akun ini saat Anda ingin memilih hasil skrining untuk disimpan.</p>
+          <p>Simpan hasil skrining dan buka kembali dari perangkat lain selama masa simpan yang Anda pilih.</p>
         </section>
 
         <section className="app-account__actions" aria-label="Pilihan akun">

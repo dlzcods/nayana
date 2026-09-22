@@ -67,7 +67,7 @@ export function ScreeningPdfAction({
   return (
     <div className={['screening-pdf', className].filter(Boolean).join(' ')}>
       <button className="app-secondary-action" type="button" onClick={() => { setError(null); setIsOpen(true) }}>
-        Export PDF
+        Siapkan PDF
       </button>
       {isOpen && (
         <div className="export-sheet-backdrop" role="presentation" onMouseDown={(event) => {

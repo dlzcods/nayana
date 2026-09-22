@@ -6,7 +6,7 @@ const navItems = [
   { label: 'Beranda', href: '/' },
   { label: 'Cara kerja', href: '/#cara-kerja' },
   { label: 'Cakupan', href: '/#cakupan' },
-  { label: 'Bukti model', href: '/model-evidence' },
+  { label: 'Hasil uji', href: '/model-evidence' },
 ]
 
 export function SiteHeader() {
@@ -43,9 +43,9 @@ export function SiteHeader() {
         </nav>
         <BrandMark />
         <nav className="optic-header__right" aria-label="Navigasi pendukung">
-          <a href="/model-evidence">Bukti model</a>
+          <a href="/model-evidence">Hasil uji</a>
           <a href={signedIn ? '/history' : '/login'}>{signedIn ? 'Riwayat' : 'Masuk'}</a>
-          <a className="optic-header__screen" href="/screening">Cek kondisi mata</a>
+          <a className="optic-header__screen" href="/screening">Mulai skrining</a>
         </nav>
         <button
           className="optic-menu"
@@ -62,7 +62,7 @@ export function SiteHeader() {
         <nav id="optic-mobile-nav" className="optic-mobile-nav optic-shell" aria-label="Navigasi seluler">
           {navItems.map((item) => <a href={item.href} key={item.label} onClick={() => setOpen(false)}>{item.label}</a>)}
           <a href={signedIn ? '/history' : '/login'} onClick={() => setOpen(false)}>{signedIn ? 'Riwayat' : 'Masuk'}</a>
-          <a className="optic-primary" href="/screening" onClick={() => setOpen(false)}>Cek kondisi mata</a>
+          <a className="optic-primary" href="/screening" onClick={() => setOpen(false)}>Mulai skrining</a>
         </nav>
       )}
     </header>

@@ -35,8 +35,8 @@ export function ScreeningPage() {
               <p className="app-kicker">Mulai skrining</p>
               <h2 id="screening-title">Mulai dari foto fundus.</h2>
               <p>
-                Unggah foto fundus Anda, atau pilih contoh untuk melihat alurnya. Hasil skrining menunjukkan
-                kemiripan pola dari model, bukan penetapan kondisi medis.
+                Pilih foto fundus atau contoh untuk memulai. Hasil menunjukkan kategori dengan pola paling mirip,
+                bukan diagnosis medis.
               </p>
               {localHistoryCount > 0 && (
                 <Link className="app-screening__local-history" to="/history-local">

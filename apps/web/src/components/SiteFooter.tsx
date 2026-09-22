@@ -6,16 +6,16 @@ export function SiteFooter() {
       <div className="shell site-footer__grid">
         <div>
           <BrandMark />
-          <p>Prototipe riset untuk panduan awal foto retina. Bukan perangkat medis dan bukan layanan darurat.</p>
+          <p>NAYANA adalah prototipe riset untuk membantu memahami hasil skrining awal dari foto retina. Bukan perangkat medis dan bukan layanan darurat.</p>
         </div>
         <div className="footer-links">
-          <span>Proyek</span>
+          <span>Tentang NAYANA</span>
           <a href="/#cara-kerja">Cara kerja</a>
-          <a href="/model-evidence">Bukti model</a>
-          <a href="/screening">Demo analisis</a>
+          <a href="/model-evidence">Hasil uji</a>
+          <a href="/screening">Mulai skrining</a>
         </div>
         <div className="footer-links">
-          <span>Kepercayaan</span>
+          <span>Privasi &amp; ketentuan</span>
           <a href="/trust">Privasi & data</a>
           <a href="/terms">Ketentuan penggunaan</a>
         </div>
