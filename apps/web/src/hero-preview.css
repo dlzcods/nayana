@@ -30,7 +30,6 @@
   .optic-header .brand__image{left:-11px;top:-26px;width:151px}
 }
 
-/* Hero proportion refinement: center the composition in the viewport below the 90px navbar. */
 .optic-hero{min-height:calc(100svh - 90px);align-items:center;padding-block:clamp(40px,6vh,72px)}
 .optic-hero h1{font-size:clamp(54px,5vw,76px)}
 .optic-hero__image{height:550px;min-height:0}
@@ -54,7 +53,6 @@
   .optic-hero__image img{min-height:0}
 }
 
-/* Concise hero emphasis and mobile-centered composition. */
 .optic-hero__underline{position:relative;display:inline-block;white-space:nowrap}
 .optic-hero__underline::after{content:"";position:absolute;left:3%;right:0;bottom:-7px;height:6px;border-radius:999px;background:#dca34a;transform:rotate(-1deg);transform-origin:left center}
 

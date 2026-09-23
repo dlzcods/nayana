@@ -63,7 +63,7 @@ def build() -> dict:
                 "chunks_sha256": digest((staging / "chunks.json").read_bytes())}
     write_json(staging / "manifest.json", manifest)
     staging.replace(destination)
-    # This candidate is not enabled in production by the build job.
+    # Record the candidate; production activates a version only through NAYANA_RAG_VERSION.
     write_json(ARTIFACTS / "candidate.json", {"version": version})
     return manifest
 

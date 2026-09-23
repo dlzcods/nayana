@@ -3036,8 +3036,7 @@
   .doctor-kit__summary, .doctor-kit__questions, .doctor-kit__chat { padding: 18px; border-radius: 19px; }
 }
 
-/* Final result-flow polish: shared navbar, compact mobile type, and deliberate
-   breathing room between the consultation sections. */
+/* Shared result-flow spacing and responsive layout. */
 .app-page > header + .result-document,
 .app-page > header + .result-workspace { padding-top: 30px; }
 .screening-save__success { grid-column: 1 / -1; margin: 0; color: #2f7a59; font-size: 12px; font-weight: 600; line-height: 1.4; }

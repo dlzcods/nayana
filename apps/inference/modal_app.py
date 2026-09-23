@@ -35,10 +35,8 @@ llm_secret = modal.Secret.from_name("nayana")
 rag_volume = modal.Volume.from_name("nayana-nei-rag", create_if_missing=False)
 
 
-# `timeout` is execution time, not the keep-warm interval.  The earlier 120-second
-# value could terminate a valid cold RAG request while it was loading the encoder
-# and waiting for the LLM.  Keep the normal five-minute execution ceiling, while
-# retaining a completed container for fifteen minutes to improve the next interaction.
+# `timeout` caps active invocations; `scaledown_window` controls idle container reuse.
+# Allow time for cold RAG loading and generation, then retain a completed container for 15 minutes.
 @app.function(
     image=image,
     secrets=[llm_secret],

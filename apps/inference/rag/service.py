@@ -88,9 +88,7 @@ def answer_question(question: str, history: list[dict], topic: str, context: dic
                                   evidence=evidence, memory_intent=memory_intent,
                                   instruction=GROUNDING_INSTRUCTION)
     import logging
-    # Modal's default log view suppresses INFO records. Keep this operational
-    # trace at WARNING until the audit is complete so successful 200 requests
-    # are observable alongside failures.
+    # Modal's default log view suppresses INFO records; WARNING keeps successful requests visible with failures.
     logging.getLogger(__name__).warning("NEI RAG retrieval trace=%s", metadata)
     # One provider call: prose only. Citation identity, markers, and exact
     # quote selection are server-owned after the model returns its answer.

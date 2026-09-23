@@ -880,10 +880,7 @@ def generate_screening_chat(payload: ScreeningChatRequest) -> ScreeningChatRespo
             # Do not rewrite text after source attribution; it could change the claim.
             return ScreeningChatResponse(**result.model_dump())
         except Exception as error:
-            # Keep the public response deliberately non-sensitive, but retain the
-            # complete traceback in Modal logs.  Previously this logged only the
-            # class name, which made an upstream timeout, malformed model JSON,
-            # and a retrieval failure indistinguishable during incident review.
+            # Keep the public response non-sensitive and retain the full traceback in Modal logs.
             logger.exception("NEI chat unavailable (error_type=%s)", type(error).__name__)
             raise HTTPException(status_code=503, detail="Jawaban bersumber belum dapat disiapkan. Silakan coba lagi; pertanyaan Anda tidak perlu dihapus.") from None
     context = build_summary_context(payload.screening)
